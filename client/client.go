@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/t3rm1n4l/go-mega"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -32,6 +33,7 @@ type Config struct {
 	Password        string
 	Recursive       bool
 	Force           bool
+	Verbose         bool
 }
 
 type Path struct {
@@ -73,6 +75,7 @@ var (
 	EINVALID_SRC    = errors.New("Invalid source path")
 	EINVALID_SYNC   = errors.New("Invalid sync command parameters")
 	ENOT_DIRECTORY  = errors.New("A non-directory exists at this path")
+	EFILE_EXISTS    = errors.New("File with same name already exists")
 )
 
 func (cfg *Config) Parse(path string) error {
@@ -90,6 +93,7 @@ func (cfg *Config) Parse(path string) error {
 }
 
 func NewMegaClient(conf *Config) *MegaClient {
+	log.SetFlags(0)
 	c := &MegaClient{
 		cfg:  conf,
 		mega: mega.New(),
@@ -287,6 +291,15 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 	} else {
 		if fi.Mode().IsDir() {
 			dstpath = path.Join(dstpath, (*pathsplit)[len(*pathsplit)-1])
+		} else {
+			if mc.cfg.Force {
+				err = os.Remove(dstpath)
+				if err != nil {
+					return err
+				}
+			} else {
+				return EFILE_EXISTS
+			}
 		}
 		err = nil
 	}
@@ -348,9 +361,32 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 		}
 
 	case lp == ln:
+		name = path.Base(srcpath)
 		node = nodes[ln-1]
 	default:
 		return err
+	}
+
+	if node.GetType() == mega.FILE {
+		if len(nodes) > 1 {
+			node = nodes[ln-2]
+		} else {
+			node = root
+		}
+	}
+
+	for _, c := range node.GetChildren() {
+		if c.GetName() == name {
+			if mc.cfg.Force {
+
+				err = mc.mega.Delete(c, false)
+				if err != nil {
+					return err
+				}
+			} else {
+				return EFILE_EXISTS
+			}
+		}
 	}
 
 	_, err = mc.mega.UploadFile(srcpath, node, name)
@@ -451,10 +487,18 @@ func (mc *MegaClient) Sync(src, dst string) error {
 		}
 	}
 
+	if mc.cfg.Verbose {
+		log.Printf("Found %d file(s) to be copied", len(paths))
+	}
+
 	for _, spath := range paths {
 		suffix := spath.GetPath()
 		x := path.Join(src, suffix)
 		y := path.Join(dst, suffix)
+
+		if mc.cfg.Verbose {
+			log.Printf("Copying %s -> %s", x, y)
+		}
 
 		dir := y
 		if spath.t == mega.FILE {
@@ -476,7 +520,7 @@ func (mc *MegaClient) Sync(src, dst string) error {
 			}
 
 			// FIXME: remove on imp of autosync
-			err := mc.mega.GetFileSystem()
+			err = mc.mega.GetFileSystem()
 			if err != nil {
 				return err
 			}

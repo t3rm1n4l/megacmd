@@ -43,12 +43,12 @@ func main() {
 	var (
 		help      = flag.Bool("help", false, "Help")
 		version   = flag.Bool("version", false, "Version")
+		verbose   = flag.Bool("verbose", false, "Verbose")
 		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
 	)
 
-	_ = help
 	_ = version
 	log.SetFlags(0)
 
@@ -77,6 +77,10 @@ func main() {
 
 	if *force {
 		conf.Force = true
+	}
+
+	if *verbose {
+		conf.Verbose = true
 	}
 
 	client := megaclient.NewMegaClient(conf)
