@@ -7,7 +7,6 @@ import (
 	"github.com/t3rm1n4l/go-mega"
 	"io/ioutil"
 	"path"
-	"strings"
 	"time"
 )
 
@@ -30,6 +29,7 @@ type Config struct {
 	User            string
 	Password        string
 	Recursive       bool
+	Force			bool
 }
 
 type Path struct {
@@ -113,58 +113,36 @@ func NewMegaClient(conf *Config) *MegaClient {
 }
 
 func (mc *MegaClient) Login() error {
-	return mc.mega.Login(mc.cfg.User, mc.cfg.Password)
+	err := mc.mega.Login(mc.cfg.User, mc.cfg.Password)
+
+	if err != nil {
+		return err
+	}
+
+	return mc.mega.GetFileSystem()
+
 }
 
 func (mc *MegaClient) List(resource string) (*[]Path, error) {
-	resource = strings.TrimSpace(resource)
-	args := strings.Split(resource, ":")
-	if len(args) != 2 || !strings.HasPrefix(args[1], "/") {
-		return nil, EINVALID_PATH
-	}
-
-	mc.mega.GetFileSystem()
-
 	var root *mega.Node
 	var paths []Path
 	var err error
 
-	switch {
-	case args[0] == ROOT:
-		root = mc.mega.FS.GetRoot()
-	case args[0] == TRASH:
-		root = mc.mega.FS.GetTrash()
-	default:
-		return nil, EINVALID_PATH
-	}
-
-	pathsplit := strings.Split(args[1], "/")[1:]
-	l := len(pathsplit)
-
-	if l > 0 && pathsplit[l-1] == "" {
-		pathsplit = pathsplit[:l-1]
-		l -= 1
-	}
-
-	if l > 0 && pathsplit[l-1] == "" {
-		switch {
-		case l == 1:
-			pathsplit = []string{}
-		default:
-			pathsplit = pathsplit[:l-2]
-		}
+	root, pathsplit, err := getLookupParams(resource, mc.mega.FS)
+	if err != nil {
+		return nil, err
 	}
 
 	var nodes []*mega.Node
-	if len(pathsplit) > 0 {
-		nodes, err = mc.mega.FS.PathLookup(root, pathsplit)
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
 	}
 
 	if err == nil {
 		l := len(nodes)
 
 		switch {
-		case len(pathsplit) == 0:
+		case len(*pathsplit) == 0:
 			nodes = root.GetChildren()
 		case l > 0:
 			nodes = nodes[l-1:]
@@ -185,8 +163,27 @@ func (mc *MegaClient) List(resource string) (*[]Path, error) {
 	return nil, err
 }
 
-func (s *MegaClient) Delete(filepath string) error {
-	return nil
+func (mc *MegaClient) Delete(resource string) error {
+	root, pathsplit, err := getLookupParams(resource, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+
+	var nodes []*mega.Node
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		err = EINVALID_PATH
+	}
+
+	if err != nil {
+		return err
+	}
+
+	l := len(nodes)
+	node := nodes[l-1]
+
+	return mc.mega.Delete(node, mc.cfg.Force)
 }
 
 func (s *MegaClient) Move(srcpath, dstpath string) {

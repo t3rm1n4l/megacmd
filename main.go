@@ -42,6 +42,7 @@ func main() {
 		version   = flag.Bool("version", false, "Version")
 		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
+		force     = flag.Bool("recursive", false, "Force hard delete or overwrite")
 	)
 
 	_ = help
@@ -71,6 +72,10 @@ func main() {
 		conf.Recursive = true
 	}
 
+	if *force {
+		conf.Force = true
+	}
+
 	client := megaclient.NewMegaClient(conf)
 	err = client.Login()
 	if err != nil {
@@ -96,6 +101,12 @@ func main() {
 				log.Println(p)
 			}
 		}
+	case cmd == DELETE:
+		err := client.Delete(arg1)
+		if err != nil {
+			log.Fatalf("ERROR: Unable to delete %s (%s)", arg1, err)
+		}
+		log.Println("Successfully deleted ", arg1)
 	}
 
 }

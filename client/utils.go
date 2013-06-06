@@ -2,6 +2,7 @@ package megaclient
 
 import (
 	"github.com/t3rm1n4l/go-mega"
+	"strings"
 )
 
 // Get all the paths by doing DFS traversal
@@ -43,4 +44,43 @@ func getPaths(n *mega.Node, recursive bool) []Path {
 	}
 
 	return paths
+}
+
+func getLookupParams(resource string, fs *mega.MegaFS) (*mega.Node, *[]string, error) {
+	resource = strings.TrimSpace(resource)
+	args := strings.Split(resource, ":")
+	if len(args) != 2 || !strings.HasPrefix(args[1], "/") {
+		return nil, nil, EINVALID_PATH
+	}
+
+    var root *mega.Node
+    var err error
+
+	switch {
+	case args[0] == ROOT:
+		root = fs.GetRoot()
+	case args[0] == TRASH:
+		root = fs.GetTrash()
+	default:
+		return nil, nil, EINVALID_PATH
+	}
+
+	pathsplit := strings.Split(args[1], "/")[1:]
+	l := len(pathsplit)
+
+	if l > 0 && pathsplit[l-1] == "" {
+		pathsplit = pathsplit[:l-1]
+		l -= 1
+	}
+
+	if l > 0 && pathsplit[l-1] == "" {
+		switch {
+		case l == 1:
+			pathsplit = []string{}
+		default:
+			pathsplit = pathsplit[:l-2]
+		}
+	}
+
+	return root, &pathsplit, err
 }
