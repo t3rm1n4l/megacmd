@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -307,8 +308,52 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 	return mc.mega.DownloadFile(node, dstpath)
 }
 
-func (s *MegaClient) Put(srcpath, dstpath string) {
-	return
+func (mc *MegaClient) Put(srcpath, dstres string) error {
+	var nodes []*mega.Node
+	var node *mega.Node
+	_, err := os.Stat(srcpath)
+
+	if err != nil {
+		return EINVALID_SRC
+	}
+
+	root, pathsplit, err := getLookupParams(dstres, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	}
+
+	if err != nil && err != mega.ENOENT {
+		return err
+	}
+
+	lp := len(*pathsplit)
+	ln := len(nodes)
+
+	var name string
+	switch {
+	case lp == ln+1 || ln == 0:
+		if ln == 0 {
+			node = root
+			x := strings.Split(dstres, "/")
+			if len(x) > 0 {
+				name = x[len(x)-1]
+			}
+		} else {
+			node = nodes[ln-1]
+			name = (*pathsplit)[lp-1]
+		}
+
+	case lp == ln:
+		node = nodes[ln-1]
+	default:
+		return err
+	}
+
+	_, err = mc.mega.UploadFile(srcpath, node, name)
+	return err
 }
 
 func (s *MegaClient) Sync(srcpath, dstpath string) {

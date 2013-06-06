@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"strings"
 )
 
 const (
@@ -116,12 +117,27 @@ func main() {
 		log.Printf("Successfully moved %s to %s\n", arg1, arg2)
 
 	case cmd == GET:
+
+		if arg2 == "" {
+			name := strings.Split(arg1, "/")
+			if len(name) > 0 {
+				arg2 = name[len(name)-1]
+			}
+		}
+
 		err := client.Get(arg1, arg2)
 		if err != nil {
 			log.Fatalf("ERROR: Downloading %s to %s failed (%s)", arg1, arg2, err)
 		}
-
 		log.Printf("Successfully downloaded file %s to %s\n", arg1, arg2)
+
+	case cmd == PUT:
+		err := client.Put(arg1, arg2)
+		if err != nil {
+			log.Fatalf("ERROR: Uploading %s to %s failed (%s)", arg1, arg2, err)
+		}
+
+		log.Printf("Successfully uploaded file %s to %s\n", arg1, arg2)
 
 	default:
 		log.Fatal("Invalid command")
