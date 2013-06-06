@@ -12,7 +12,7 @@ import (
 
 const (
 	PATH_WIDTH = 50
-	SIZE_WIDTH = 5
+	SIZE_WIDTH = 10
 )
 
 type MegaClient struct {
@@ -29,7 +29,7 @@ type Config struct {
 	User            string
 	Password        string
 	Recursive       bool
-	Force			bool
+	Force           bool
 }
 
 type Path struct {
@@ -186,8 +186,76 @@ func (mc *MegaClient) Delete(resource string) error {
 	return mc.mega.Delete(node, mc.cfg.Force)
 }
 
-func (s *MegaClient) Move(srcpath, dstpath string) {
-	return
+func (mc *MegaClient) Move(srcres, dstres string) error {
+	root, pathsplit, err := getLookupParams(srcres, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+
+	var nodes []*mega.Node
+	var srcnode, dstnode *mega.Node
+	var name string
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		err = EINVALID_PATH
+	}
+
+	if err != nil {
+		return err
+	}
+
+	srcnode = nodes[len(nodes)-1]
+
+	root, pathsplit, err = getLookupParams(dstres, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		err = EINVALID_PATH
+	}
+
+	if err != nil && err != mega.ENOENT {
+		return err
+	}
+
+	lp := len(*pathsplit)
+	ln := len(nodes)
+
+	var rename bool
+	switch {
+	case lp == ln:
+		dstnode = nodes[ln-1]
+		rename = false
+	case lp == ln+1:
+		if ln == 0 {
+			dstnode = root
+		} else {
+			dstnode = nodes[ln-1]
+		}
+		name = (*pathsplit)[lp-1]
+		rename = true
+	default:
+		return err
+	}
+
+	// FIXME: auto fs update
+	mc.mega.GetFileSystem()
+
+	err = mc.mega.Move(srcnode, dstnode)
+
+	if err != nil {
+		return err
+	}
+
+	if rename {
+		err = mc.mega.Rename(srcnode, name)
+	}
+
+	return err
 }
 
 func (s *MegaClient) Get(srcpath, dstpath string) {

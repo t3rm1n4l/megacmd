@@ -42,7 +42,7 @@ func main() {
 		version   = flag.Bool("version", false, "Version")
 		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
-		force     = flag.Bool("recursive", false, "Force hard delete or overwrite")
+		force     = flag.Bool("force", false, "Force hard delete or overwrite")
 	)
 
 	_ = help
@@ -89,7 +89,6 @@ func main() {
 		arg2 = flag.Arg(2)
 	}
 
-	_ = arg2
 	switch {
 	case cmd == LIST:
 		paths, err := client.List(arg1)
@@ -107,6 +106,17 @@ func main() {
 			log.Fatalf("ERROR: Unable to delete %s (%s)", arg1, err)
 		}
 		log.Println("Successfully deleted ", arg1)
+
+	case cmd == MOVE:
+		err := client.Move(arg1, arg2)
+		if err != nil {
+			log.Fatalf("ERROR: Unable to move %s (%s)", arg1, err)
+		}
+
+		log.Printf("Successfully moved %s to %s\n", arg1, arg2)
+
+	default:
+		log.Fatal("Invalid command")
 	}
 
 }

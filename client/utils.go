@@ -53,8 +53,8 @@ func getLookupParams(resource string, fs *mega.MegaFS) (*mega.Node, *[]string, e
 		return nil, nil, EINVALID_PATH
 	}
 
-    var root *mega.Node
-    var err error
+	var root *mega.Node
+	var err error
 
 	switch {
 	case args[0] == ROOT:
