@@ -48,11 +48,10 @@ func (p *Path) SetPrefix(s string) {
 
 func (p Path) GetPath() string {
 	x := path.Join(p.path...)
+	x = path.Join(p.prefix, x)
 	if p.t == mega.FOLDER {
 		x = x + "/"
 	}
-
-	x = p.prefix + x
 
 	return x
 }
@@ -72,6 +71,8 @@ var (
 	ENOT_FILE       = errors.New("Requested object is not a file")
 	EINVALID_DEST   = errors.New("Invalid destination path")
 	EINVALID_SRC    = errors.New("Invalid source path")
+	EINVALID_SYNC   = errors.New("Invalid sync command parameters")
+	ENOT_DIRECTORY  = errors.New("A non-directory exists at this path")
 )
 
 func (cfg *Config) Parse(path string) error {
@@ -157,7 +158,7 @@ func (mc *MegaClient) List(resource string) (*[]Path, error) {
 		}
 
 		for _, n := range nodes {
-			for _, p := range getPaths(n, mc.cfg.Recursive) {
+			for _, p := range getRemotePaths(n, mc.cfg.Recursive) {
 				p.SetPrefix(resource)
 				paths = append(paths, p)
 			}
@@ -356,7 +357,138 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 	return err
 }
 
-func (s *MegaClient) Sync(srcpath, dstpath string) {
-	return
+func (mc *MegaClient) Mkdir(dstres string) error {
+	var nodes []*mega.Node
+	var node *mega.Node
 
+	root, pathsplit, err := getLookupParams(dstres, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		return nil
+	}
+
+	lp := len(*pathsplit)
+	ln := len(nodes)
+
+	if len(nodes) > 0 {
+		node = nodes[ln-1]
+	} else {
+		node = root
+	}
+
+	switch {
+	case err == nil:
+		if node.GetType() != mega.FOLDER {
+			return ENOT_DIRECTORY
+		}
+		return nil
+	case err == mega.ENOENT:
+		remaining := lp - ln
+		for i := 0; i < remaining; i++ {
+			name := (*pathsplit)[ln]
+			node, err = mc.mega.CreateDir(name, node)
+			if err != nil {
+				return err
+			}
+			ln += 1
+		}
+		err = nil
+
+	default:
+		return err
+	}
+
+	return nil
+}
+
+func (mc *MegaClient) Sync(src, dst string) error {
+	var srcremote bool
+	var paths []Path
+	root, pathsplits, err := getLookupParams(src, mc.mega.FS)
+	switch {
+	case err == EINVALID_PATH:
+		r, ps, e := getLookupParams(dst, mc.mega.FS)
+		if e != nil {
+			return EINVALID_SYNC
+		}
+		root = r
+		pathsplits = ps
+		err = e
+		srcremote = false
+	case err == nil:
+		_, _, e := getLookupParams(dst, mc.mega.FS)
+		if e != EINVALID_PATH {
+			return EINVALID_SYNC
+		}
+		err = e
+		srcremote = true
+	default:
+		return err
+	}
+
+	if srcremote {
+		var node *mega.Node
+		nodes, err := mc.mega.FS.PathLookup(root, *pathsplits)
+		if err != nil {
+			return err
+		}
+		if len(nodes) > 0 {
+			node = nodes[len(nodes)-1]
+		} else {
+			node = root
+		}
+		for _, n := range node.GetChildren() {
+			paths = append(paths, getRemotePaths(n, true)...)
+		}
+	} else {
+		paths, err = getLocalPaths(src)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, spath := range paths {
+		suffix := spath.GetPath()
+		x := path.Join(src, suffix)
+		y := path.Join(dst, suffix)
+
+		dir := y
+		if spath.t == mega.FILE {
+			dir = path.Dir(y)
+		}
+
+		if srcremote {
+			err = os.MkdirAll(dir, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			if spath.t == mega.FILE {
+				err = mc.Get(x, y)
+			}
+		} else {
+			err = mc.Mkdir(dir)
+			if err != nil {
+				return err
+			}
+
+			// FIXME: remove on imp of autosync
+			err := mc.mega.GetFileSystem()
+			if err != nil {
+				return err
+			}
+
+			if spath.t == mega.FILE {
+				err = mc.Put(x, y)
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

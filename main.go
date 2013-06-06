@@ -21,6 +21,7 @@ const USAGE = `
 	megacmd [OPTIONS] get mega:/foo/file.txt /tmp/
 	megacmd [OPTIONS] put /tmp/hello.txt mega:/bar/
 	megacmd [OPTIONS] delete mega:/foo/bar
+	megacmd [OPTIONS] mkdir mega:/foo/bar
 	megacmd [OPTIONS] move mega:/foo/file.txt mega:/bar/foo.txt
 	megacmd [OPTIONS] sync mega:/foo/ /tmp/foo/
 	megacmd [OPTIONS] sync /tmp/foo mega:/foo
@@ -32,6 +33,7 @@ const (
 	GET    = "get"
 	PUT    = "put"
 	DELETE = "delete"
+	MKDIR  = "mkdir"
 	MOVE   = "move"
 	SYNC   = "sync"
 )
@@ -129,7 +131,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("ERROR: Downloading %s to %s failed (%s)", arg1, arg2, err)
 		}
-		log.Printf("Successfully downloaded file %s to %s\n", arg1, arg2)
+		log.Printf("Successfully downloaded file %s to %s", arg1, arg2)
 
 	case cmd == PUT:
 		err := client.Put(arg1, arg2)
@@ -137,7 +139,23 @@ func main() {
 			log.Fatalf("ERROR: Uploading %s to %s failed (%s)", arg1, arg2, err)
 		}
 
-		log.Printf("Successfully uploaded file %s to %s\n", arg1, arg2)
+		log.Printf("Successfully uploaded file %s to %s", arg1, arg2)
+
+	case cmd == MKDIR:
+		err := client.Mkdir(arg1)
+		if err != nil {
+			log.Fatalf("ERROR: Unable to create directory %s (%s)", arg1, err)
+		}
+
+		log.Printf("Successfully created directory at %s", arg1)
+
+	case cmd == SYNC:
+		err := client.Sync(arg1, arg2)
+		if err != nil {
+			log.Fatalf("ERROR: Unable to sync %s to %s (%s)", arg1, arg2, err)
+		}
+
+		log.Printf("Successfully sync %s to %s", arg1, arg2)
 
 	default:
 		log.Fatal("Invalid command")

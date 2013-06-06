@@ -2,11 +2,13 @@ package megaclient
 
 import (
 	"github.com/t3rm1n4l/go-mega"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
 // Get all the paths by doing DFS traversal
-func getPaths(n *mega.Node, recursive bool) []Path {
+func getRemotePaths(n *mega.Node, recursive bool) []Path {
 	paths := []Path{}
 	pathstack := []string{n.GetName()}
 	nodestack := []*mega.Node{n}
@@ -44,6 +46,37 @@ func getPaths(n *mega.Node, recursive bool) []Path {
 	}
 
 	return paths
+}
+
+func getLocalPaths(root string) ([]Path, error) {
+	var paths []Path
+
+	walker := func(p string, info os.FileInfo, err error) error {
+		var x Path
+		p, _ = filepath.Rel(root, p)
+		if p == "." {
+			return nil
+		}
+
+		x.path = strings.Split(p, "/")
+		switch {
+		case info.IsDir():
+			x.t = mega.FOLDER
+		case info.Mode().IsRegular():
+			x.t = mega.FILE
+		default:
+			return nil
+		}
+
+		x.size = info.Size()
+		paths = append(paths, x)
+
+		return nil
+	}
+
+	err := filepath.Walk(root, walker)
+
+	return paths, err
 }
 
 func getLookupParams(resource string, fs *mega.MegaFS) (*mega.Node, *[]string, error) {
