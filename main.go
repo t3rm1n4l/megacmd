@@ -115,6 +115,14 @@ func main() {
 
 		log.Printf("Successfully moved %s to %s\n", arg1, arg2)
 
+	case cmd == GET:
+		err := client.Get(arg1, arg2)
+		if err != nil {
+			log.Fatalf("ERROR: Downloading %s to %s failed (%s)", arg1, arg2, err)
+		}
+
+		log.Printf("Successfully downloaded file %s to %s\n", arg1, arg2)
+
 	default:
 		log.Fatal("Invalid command")
 	}

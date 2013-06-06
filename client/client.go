@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/t3rm1n4l/go-mega"
 	"io/ioutil"
+	"os"
 	"path"
 	"time"
 )
@@ -67,6 +68,9 @@ const (
 var (
 	EINVALID_CONFIG = errors.New("Invalid json config")
 	EINVALID_PATH   = errors.New("Invalid mega path")
+	ENOT_FILE       = errors.New("Requested object is not a file")
+	EINVALID_DEST   = errors.New("Invalid destination path")
+	EINVALID_SRC    = errors.New("Invalid source path")
 )
 
 func (cfg *Config) Parse(path string) error {
@@ -258,8 +262,49 @@ func (mc *MegaClient) Move(srcres, dstres string) error {
 	return err
 }
 
-func (s *MegaClient) Get(srcpath, dstpath string) {
-	return
+func (mc *MegaClient) Get(srcres, dstpath string) error {
+	root, pathsplit, err := getLookupParams(srcres, mc.mega.FS)
+	if err != nil {
+		return err
+	}
+
+	var nodes []*mega.Node
+	var node *mega.Node
+
+	fi, err := os.Stat(dstpath)
+	if os.IsNotExist(err) {
+		d := path.Dir(dstpath)
+		fi, err := os.Stat(d)
+		if os.IsNotExist(err) {
+			return EINVALID_DEST
+		} else {
+			if !fi.Mode().IsDir() {
+				return EINVALID_DEST
+			}
+		}
+	} else {
+		if fi.Mode().IsDir() {
+			dstpath = path.Join(dstpath, (*pathsplit)[len(*pathsplit)-1])
+		}
+		err = nil
+	}
+
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		err = EINVALID_PATH
+	}
+
+	if err != nil {
+		return err
+	} else {
+		node = nodes[len(nodes)-1]
+		if node.GetType() != mega.FILE {
+			return ENOT_FILE
+		}
+	}
+
+	return mc.mega.DownloadFile(node, dstpath)
 }
 
 func (s *MegaClient) Put(srcpath, dstpath string) {
