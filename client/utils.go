@@ -1,10 +1,14 @@
 package megaclient
 
 import (
+	"fmt"
+	"github.com/t3rm1n4l/go-humanize"
 	"github.com/t3rm1n4l/go-mega"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Get all the paths by doing DFS traversal
@@ -116,4 +120,45 @@ func getLookupParams(resource string, fs *mega.MegaFS) (*mega.Node, *[]string, e
 	}
 
 	return root, &pathsplit, err
+}
+
+func RoundDuration(d time.Duration) time.Duration {
+	return time.Second * time.Duration(int(d.Seconds()))
+}
+
+func progressBar(ch chan int, wg *sync.WaitGroup, size int64, src, dst string) {
+	defer func() {
+		fmt.Println()
+		wg.Done()
+	}()
+	bytesread := 0
+	bps := uint64(0)
+	percent := float32(0)
+	elapsed := time.Duration(0)
+
+	start := time.Now()
+	for {
+		b := 0
+		ok := false
+
+		select {
+		case b, ok = <-ch:
+			if ok == false {
+				return
+			}
+
+		case <-time.After(time.Second):
+			elapsed = time.Now().Sub(start)
+			dur := RoundDuration(elapsed)
+			fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+			continue
+
+		}
+		bytesread += b
+		elapsed = time.Now().Sub(start)
+		bps = uint64(float64(bytesread) / elapsed.Seconds())
+		percent = 100 * float32(bytesread) / float32(size)
+		dur := RoundDuration(elapsed)
+		fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+	}
 }

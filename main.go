@@ -7,9 +7,11 @@ import (
 	"github.com/t3rm1n4l/megacmd/client"
 	"log"
 	"os"
+	"os/signal"
 	"os/user"
 	"path"
 	"strings"
+	"time"
 )
 
 const (
@@ -43,7 +45,7 @@ func main() {
 	var (
 		help      = flag.Bool("help", false, "Help")
 		version   = flag.Bool("version", false, "Version")
-		verbose   = flag.Bool("verbose", false, "Verbose")
+		verbose   = flag.Int("verbose", 1, "Verbose")
 		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
@@ -79,9 +81,17 @@ func main() {
 		conf.Force = true
 	}
 
-	if *verbose {
-		conf.Verbose = true
+	if *verbose != 1 {
+		conf.Verbose = *verbose
 	}
+
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
+		fmt.Printf("\033[2K\rQuit!\n")
+		os.Exit(1)
+	}()
 
 	client := megaclient.NewMegaClient(conf)
 	err = client.Login()
@@ -131,19 +141,22 @@ func main() {
 			}
 		}
 
+		x := time.Now()
 		err := client.Get(arg1, arg2)
 		if err != nil {
 			log.Fatalf("ERROR: Downloading %s to %s failed (%s)", arg1, arg2, err)
 		}
-		log.Printf("Successfully downloaded file %s to %s", arg1, arg2)
+		log.Printf("Successfully downloaded file %s to %s in %v", arg1, arg2, time.Now().Sub(x))
 
 	case cmd == PUT:
+		x := time.Now()
 		err := client.Put(arg1, arg2)
 		if err != nil {
 			log.Fatalf("ERROR: Uploading %s to %s failed (%s)", arg1, arg2, err)
 		}
 
-		log.Printf("Successfully uploaded file %s to %s", arg1, arg2)
+		dur := megaclient.RoundDuration(time.Now().Sub(x))
+		log.Printf("Successfully uploaded file %s to %s in %s", arg1, arg2, dur)
 
 	case cmd == MKDIR:
 		err := client.Mkdir(arg1)
@@ -154,12 +167,14 @@ func main() {
 		log.Printf("Successfully created directory at %s", arg1)
 
 	case cmd == SYNC:
+		x := time.Now()
 		err := client.Sync(arg1, arg2)
 		if err != nil {
 			log.Fatalf("ERROR: Unable to sync %s to %s (%s)", arg1, arg2, err)
 		}
 
-		log.Printf("Successfully sync %s to %s", arg1, arg2)
+		dur := megaclient.RoundDuration(time.Now().Sub(x))
+		log.Printf("Successfully sync %s to %s in %v", arg1, arg2, dur)
 
 	default:
 		log.Fatal("Invalid command")

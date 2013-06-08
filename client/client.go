@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,7 +34,7 @@ type Config struct {
 	Password        string
 	Recursive       bool
 	Force           bool
-	Verbose         bool
+	Verbose         int
 }
 
 type Path struct {
@@ -319,7 +320,19 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 		}
 	}
 
-	return mc.mega.DownloadFile(node, dstpath)
+	var ch *chan int
+	var wg sync.WaitGroup
+	if mc.cfg.Verbose > 0 {
+		ch = new(chan int)
+		*ch = make(chan int)
+
+		wg.Add(1)
+		go progressBar(*ch, &wg, node.GetSize(), srcres, dstpath)
+	}
+
+	err = mc.mega.DownloadFile(node, dstpath, ch)
+	wg.Wait()
+	return err
 }
 
 func (mc *MegaClient) Put(srcpath, dstres string) error {
@@ -378,8 +391,10 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 	for _, c := range node.GetChildren() {
 		if c.GetName() == name {
 			if mc.cfg.Force {
-
 				err = mc.mega.Delete(c, false)
+				if err != nil {
+					return err
+				}
 				if err != nil {
 					return err
 				}
@@ -389,7 +404,22 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 		}
 	}
 
-	_, err = mc.mega.UploadFile(srcpath, node, name)
+	var ch *chan int
+	var wg sync.WaitGroup
+	if mc.cfg.Verbose > 0 {
+		ch = new(chan int)
+		*ch = make(chan int)
+		fi, err := os.Stat(srcpath)
+		if err != nil {
+			return err
+		}
+
+		wg.Add(1)
+		go progressBar(*ch, &wg, fi.Size(), srcpath, dstres)
+	}
+
+	_, err = mc.mega.UploadFile(srcpath, node, name, ch)
+	wg.Wait()
 	return err
 }
 
@@ -487,7 +517,7 @@ func (mc *MegaClient) Sync(src, dst string) error {
 		}
 	}
 
-	if mc.cfg.Verbose {
+	if mc.cfg.Verbose > 0 {
 		log.Printf("Found %d file(s) to be copied", len(paths))
 	}
 
@@ -495,10 +525,6 @@ func (mc *MegaClient) Sync(src, dst string) error {
 		suffix := spath.GetPath()
 		x := path.Join(src, suffix)
 		y := path.Join(dst, suffix)
-
-		if mc.cfg.Verbose {
-			log.Printf("Copying %s -> %s", x, y)
-		}
 
 		dir := y
 		if spath.t == mega.FILE {
