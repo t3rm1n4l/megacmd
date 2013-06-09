@@ -1,0 +1,7 @@
+{
+    "User" : "MEGA_USER",
+    "Password" : "MEGA_PASSWD",
+    "DownloadWorkers" : 3,
+    "UploadWorkers" : 3,
+    "Verbose" : 0
+}
