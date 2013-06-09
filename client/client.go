@@ -77,6 +77,7 @@ var (
 	EINVALID_SYNC   = errors.New("Invalid sync command parameters")
 	ENOT_DIRECTORY  = errors.New("A non-directory exists at this path")
 	EFILE_EXISTS    = errors.New("File with same name already exists")
+	EDIR_EXISTS     = errors.New("A directory with same name already exists")
 )
 
 func (cfg *Config) Parse(path string) error {
@@ -151,23 +152,32 @@ func (mc *MegaClient) List(resource string) (*[]Path, error) {
 
 	if err == nil {
 		l := len(nodes)
-
+		var indexnode *mega.Node
 		switch {
 		case len(*pathsplit) == 0:
+			indexnode = root
 			nodes = root.GetChildren()
 		case l > 0:
-			nodes = nodes[l-1:]
-			if len(nodes) == 1 {
-				nodes = nodes[0].GetChildren()
+			indexnode = nodes[l-1]
+			nodes = nodes[l-1].GetChildren()
+		}
+
+		if indexnode != nil && strings.HasSuffix(resource, "/") == false {
+			var p Path
+			p.SetPrefix(resource)
+			p.t = indexnode.GetType()
+			p.size = indexnode.GetSize()
+			p.ts = indexnode.GetTimeStamp()
+			paths = append(paths, p)
+		} else {
+			for _, n := range nodes {
+				for _, p := range getRemotePaths(n, mc.cfg.Recursive) {
+					p.SetPrefix(resource)
+					paths = append(paths, p)
+				}
 			}
 		}
 
-		for _, n := range nodes {
-			for _, p := range getRemotePaths(n, mc.cfg.Recursive) {
-				p.SetPrefix(resource)
-				paths = append(paths, p)
-			}
-		}
 		return &paths, nil
 	}
 
@@ -240,6 +250,17 @@ func (mc *MegaClient) Move(srcres, dstres string) error {
 	switch {
 	case lp == ln:
 		dstnode = nodes[ln-1]
+		if strings.HasSuffix(dstres, "/") {
+			if dstnode.GetType() != mega.FOLDER {
+				return EFILE_EXISTS
+			}
+		} else {
+			if dstnode.GetType() == mega.FOLDER {
+				return EDIR_EXISTS
+			} else {
+				return EFILE_EXISTS
+			}
+		}
 		rename = false
 	case lp == ln+1:
 		if ln == 0 {
@@ -291,8 +312,15 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 		}
 	} else {
 		if fi.Mode().IsDir() {
-			dstpath = path.Join(dstpath, (*pathsplit)[len(*pathsplit)-1])
-		} else {
+			if strings.HasSuffix(dstpath, "/") {
+				dstpath = path.Join(dstpath, (*pathsplit)[len(*pathsplit)-1])
+			} else {
+				return EDIR_EXISTS
+			}
+		}
+
+		_, err := os.Stat(dstpath)
+		if os.IsNotExist(err) == false {
 			if mc.cfg.Force {
 				err = os.Remove(dstpath)
 				if err != nil {
@@ -360,32 +388,47 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 	ln := len(nodes)
 
 	var name string
-	switch {
-	case lp == ln+1 || ln == 0:
-		if ln == 0 {
-			node = root
-			x := strings.Split(dstres, "/")
-			if len(x) > 0 {
-				name = x[len(x)-1]
-			}
-		} else {
-			node = nodes[ln-1]
-			name = (*pathsplit)[lp-1]
-		}
 
+	switch {
+
+	case lp == ln+1 && ln > 0:
+		node = nodes[ln-1]
+		if node.GetType() == mega.FOLDER && strings.HasSuffix(dstres, "/") == false {
+			name = (*pathsplit)[lp-1]
+		} else {
+			return err
+		}
 	case lp == ln:
 		name = path.Base(srcpath)
-		node = nodes[ln-1]
+		if lp == 0 {
+			node = root
+		} else {
+			node = nodes[ln-1]
+			if node.GetType() == mega.FOLDER {
+				if strings.HasSuffix(dstres, "/") == false {
+					return EDIR_EXISTS
+				}
+			} else {
+				if strings.HasSuffix(dstres, "/") == true {
+					return ENOT_DIRECTORY
+				}
+				name = path.Base(dstres)
+				if len(nodes) > 1 {
+					node = nodes[ln-2]
+				} else {
+					node = root
+				}
+			}
+		}
+	case ln == 0 && lp == 1:
+		if strings.HasSuffix(dstres, "/") == false {
+			node = root
+			name = path.Base(srcpath)
+		} else {
+			return err
+		}
 	default:
 		return err
-	}
-
-	if node.GetType() == mega.FILE {
-		if len(nodes) > 1 {
-			node = nodes[ln-2]
-		} else {
-			node = root
-		}
 	}
 
 	for _, c := range node.GetChildren() {
@@ -555,6 +598,13 @@ func (mc *MegaClient) Sync(src, dst string) error {
 				err = mc.Put(x, y)
 			}
 		}
+		if mc.cfg.Verbose > 0 {
+			if err == EFILE_EXISTS {
+				file := path.Join(dst, spath.GetPath())
+				err = errors.New(fmt.Sprintf("%s - %s", file, EFILE_EXISTS))
+			}
+		}
+
 		if err != nil {
 			return err
 		}

@@ -58,6 +58,10 @@ func getLocalPaths(root string) ([]Path, error) {
 	walker := func(p string, info os.FileInfo, err error) error {
 		var x Path
 		p, _ = filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+
 		if p == "." {
 			return nil
 		}
@@ -135,7 +139,13 @@ func progressBar(ch chan int, wg *sync.WaitGroup, size int64, src, dst string) {
 	bps := uint64(0)
 	percent := float32(0)
 	elapsed := time.Duration(0)
+	dur := time.Duration(0)
 
+	showProgress := func() {
+		fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+	}
+
+	showProgress()
 	start := time.Now()
 	for {
 		b := 0
@@ -149,8 +159,8 @@ func progressBar(ch chan int, wg *sync.WaitGroup, size int64, src, dst string) {
 
 		case <-time.After(time.Second):
 			elapsed = time.Now().Sub(start)
-			dur := RoundDuration(elapsed)
-			fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+			dur = RoundDuration(elapsed)
+			showProgress()
 			continue
 
 		}
@@ -158,7 +168,7 @@ func progressBar(ch chan int, wg *sync.WaitGroup, size int64, src, dst string) {
 		elapsed = time.Now().Sub(start)
 		bps = uint64(float64(bytesread) / elapsed.Seconds())
 		percent = 100 * float32(bytesread) / float32(size)
-		dur := RoundDuration(elapsed)
-		fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+		dur = RoundDuration(elapsed)
+		showProgress()
 	}
 }
