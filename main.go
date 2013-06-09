@@ -16,6 +16,9 @@ import (
 
 const (
 	CONFIG_FILE = ".megacmd.json"
+	VERSION     = "0.01"
+	AUTHOR      = "Sarath Lakshman"
+	URL         = "github.com/t3rm1n4l/megacmd"
 )
 
 const USAGE = `
@@ -51,7 +54,6 @@ func main() {
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
 	)
 
-	_ = version
 	log.SetFlags(0)
 
 	var Usage = func() {
@@ -61,6 +63,13 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *version {
+		fmt.Println("Version : ", VERSION)
+		fmt.Println("Author  : ", AUTHOR)
+		fmt.Println("Github  : ", URL)
+		os.Exit(0)
+	}
 
 	if flag.NArg() < 2 || *help {
 		Usage()
@@ -96,7 +105,11 @@ func main() {
 	client := megaclient.NewMegaClient(conf)
 	err = client.Login()
 	if err != nil {
-		log.Fatal("Login failed, Please verify username or password")
+		if err == mega.ENOENT {
+			log.Fatal("Login failed, Please verify username or password")
+		} else {
+			log.Fatal("Unable to establish connection to mega service")
+		}
 	}
 
 	cmd := flag.Arg(0)
@@ -146,7 +159,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("ERROR: Downloading %s to %s failed (%s)", arg1, arg2, err)
 		}
-		log.Printf("Successfully downloaded file %s to %s in %v", arg1, arg2, time.Now().Sub(x))
+		dur := megaclient.RoundDuration(time.Now().Sub(x))
+		log.Printf("Successfully downloaded file %s to %s in %v", arg1, arg2, dur)
 
 	case cmd == PUT:
 		x := time.Now()
@@ -174,7 +188,7 @@ func main() {
 		}
 
 		dur := megaclient.RoundDuration(time.Now().Sub(x))
-		log.Printf("Successfully sync %s to %s in %v", arg1, arg2, dur)
+		log.Printf("Successfully sync %s to %s in %s", arg1, arg2, dur)
 
 	default:
 		log.Fatal("Invalid command")
