@@ -1,0 +1,10 @@
+--- 
+env: 
+  matrix: 
+    secure: |-
+      CE7kYjKYJ0DB4Px8TiqQdS0lu9N00DvA3Rj7Kn4NwL/Jq0PatpHxKLE/B8uI
+      pHRWt26MmJ1rmOllB4rouUGyQENYo2mvF2VkHtuEUU07EQfbxHO6yfhoC9U/
+      3x5xrMxWWeUx+jp5KauktA2T8kUrOuaebcef+8dSGE10a0E1WhA=
+notifications: 
+  email: false
+script: make build && make test

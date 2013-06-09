@@ -12,12 +12,11 @@ for t in t_*.sh;
 do
     echo "#### EXECUTING TEST $t ####"
     ./$t
-    if [ $exit_status -eq 0 ];
+    if [ $? -ne 0 ];
     then
-        exit_status=$?
+        exit 1
     fi
     echo "#### COMPLETED TEST $t ###"
     echo
 done
 
-exit exit_status
