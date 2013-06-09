@@ -70,7 +70,8 @@ func getLocalPaths(root string) ([]Path, error) {
 		switch {
 		case info.IsDir():
 			x.t = mega.FOLDER
-		case info.Mode().IsRegular():
+		// Go 1.0 compatibility
+	case info.Mode() & os.ModeType == 0:
 			x.t = mega.FILE
 		default:
 			return nil
