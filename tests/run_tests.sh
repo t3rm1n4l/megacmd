@@ -1,4 +1,7 @@
 #!/bin/bash
+# Description: Tests execution wrapper
+
+trap exit SIGINT
 
 echo Setting up test env
 cd `dirname ${BASH_SOURCE[*]}`
