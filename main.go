@@ -102,7 +102,11 @@ func main() {
 		os.Exit(1)
 	}()
 
-	client := megaclient.NewMegaClient(conf)
+	client, err := megaclient.NewMegaClient(conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = client.Login()
 	if err != nil {
 		if err == mega.ENOENT {

@@ -94,8 +94,9 @@ func (cfg *Config) Parse(path string) error {
 	return nil
 }
 
-func NewMegaClient(conf *Config) *MegaClient {
+func NewMegaClient(conf *Config) (*MegaClient, error) {
 	log.SetFlags(0)
+	var err error
 	c := &MegaClient{
 		cfg:  conf,
 		mega: mega.New(),
@@ -110,29 +111,30 @@ func NewMegaClient(conf *Config) *MegaClient {
 	}
 
 	if conf.DownloadWorkers != 0 {
-		c.mega.SetDownloadWorkers(conf.DownloadWorkers)
+		err = c.mega.SetDownloadWorkers(conf.DownloadWorkers)
+
+		if err == mega.EWORKER_LIMIT_EXCEEDED {
+			err = errors.New(fmt.Sprint("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_DOWNLOAD_WORKERS))
+		}
 	}
 
 	if conf.UploadWorkers != 0 {
-		c.mega.SetUploadWorkers(conf.UploadWorkers)
+		err = c.mega.SetUploadWorkers(conf.UploadWorkers)
+		if err == mega.EWORKER_LIMIT_EXCEEDED {
+			err = errors.New(fmt.Sprint("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_UPLOAD_WORKERS))
+		}
 	}
 
 	if conf.TimeOut != 0 {
 		c.mega.SetTimeOut(time.Duration(conf.TimeOut) * time.Second)
 	}
 
-	return c
+	return c, err
 }
 
 func (mc *MegaClient) Login() error {
 	err := mc.mega.Login(mc.cfg.User, mc.cfg.Password)
-
-	if err != nil {
-		return err
-	}
-
-	return mc.mega.GetFileSystem()
-
+	return err
 }
 
 func (mc *MegaClient) List(resource string) (*[]Path, error) {
@@ -156,10 +158,16 @@ func (mc *MegaClient) List(resource string) (*[]Path, error) {
 		switch {
 		case len(*pathsplit) == 0:
 			indexnode = root
-			nodes = root.GetChildren()
+			nodes, _ = mc.mega.FS.GetChildren(root)
+			if err != nil {
+				return nil, err
+			}
 		case l > 0:
 			indexnode = nodes[l-1]
-			nodes = nodes[l-1].GetChildren()
+			nodes, _ = mc.mega.FS.GetChildren(nodes[l-1])
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if indexnode != nil && strings.HasSuffix(resource, "/") == false {
@@ -171,7 +179,7 @@ func (mc *MegaClient) List(resource string) (*[]Path, error) {
 			paths = append(paths, p)
 		} else {
 			for _, n := range nodes {
-				for _, p := range getRemotePaths(n, mc.cfg.Recursive) {
+				for _, p := range getRemotePaths(mc.mega.FS, n, mc.cfg.Recursive) {
 					p.SetPrefix(resource)
 					paths = append(paths, p)
 				}
@@ -273,9 +281,6 @@ func (mc *MegaClient) Move(srcres, dstres string) error {
 	default:
 		return err
 	}
-
-	// FIXME: auto fs update
-	mc.mega.GetFileSystem()
 
 	err = mc.mega.Move(srcnode, dstnode)
 
@@ -431,7 +436,12 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 		return err
 	}
 
-	for _, c := range node.GetChildren() {
+	children, err := mc.mega.FS.GetChildren(node)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range children {
 		if c.GetName() == name {
 			if mc.cfg.Force {
 				err = mc.mega.Delete(c, false)
@@ -550,8 +560,14 @@ func (mc *MegaClient) Sync(src, dst string) error {
 		} else {
 			node = root
 		}
-		for _, n := range node.GetChildren() {
-			paths = append(paths, getRemotePaths(n, true)...)
+
+		children, err := mc.mega.FS.GetChildren(node)
+		if err != nil {
+			return err
+		}
+
+		for _, n := range children {
+			paths = append(paths, getRemotePaths(mc.mega.FS, n, true)...)
 		}
 	} else {
 		paths, err = getLocalPaths(src)
@@ -588,8 +604,6 @@ func (mc *MegaClient) Sync(src, dst string) error {
 				return err
 			}
 
-			// FIXME: remove on imp of autosync
-			err = mc.mega.GetFileSystem()
 			if err != nil {
 				return err
 			}

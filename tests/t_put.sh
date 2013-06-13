@@ -26,7 +26,7 @@ fi
 
 run $MEGACMD -force put $JUNK/x.2 mega:/testing/x.2
 expected="mega:/testing/x.2                                  102400"
-run $MEGACMD list mega:/testing
+run $MEGACMD list mega:/testing/
 if ! grep -q "$expected" $OUT;
 then
     fail Unexpected result

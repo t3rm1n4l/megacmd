@@ -12,7 +12,7 @@ import (
 )
 
 // Get all the paths by doing DFS traversal
-func getRemotePaths(n *mega.Node, recursive bool) []Path {
+func getRemotePaths(fs *mega.MegaFS, n *mega.Node, recursive bool) []Path {
 	paths := []Path{}
 	pathstack := []string{n.GetName()}
 	nodestack := []*mega.Node{n}
@@ -25,7 +25,7 @@ func getRemotePaths(n *mega.Node, recursive bool) []Path {
 
 		children := []*mega.Node{}
 		if recursive {
-			children = node.GetChildren()
+			children, _ = fs.GetChildren(node)
 		}
 		switch {
 		case next < len(children):
@@ -70,8 +70,8 @@ func getLocalPaths(root string) ([]Path, error) {
 		switch {
 		case info.IsDir():
 			x.t = mega.FOLDER
-		// Go 1.0 compatibility
-	case info.Mode() & os.ModeType == 0:
+			// Go 1.0 compatibility
+		case info.Mode()&os.ModeType == 0:
 			x.t = mega.FILE
 		default:
 			return nil
