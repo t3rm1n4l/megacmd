@@ -371,10 +371,14 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 func (mc *MegaClient) Put(srcpath, dstres string) error {
 	var nodes []*mega.Node
 	var node *mega.Node
-	_, err := os.Stat(srcpath)
+	info, err := os.Stat(srcpath)
 
 	if err != nil {
 		return EINVALID_SRC
+	}
+
+	if info.Mode() & os.ModeType != 0 {
+		return ENOT_FILE
 	}
 
 	root, pathsplit, err := getLookupParams(dstres, mc.mega.FS)
