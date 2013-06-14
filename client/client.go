@@ -34,6 +34,7 @@ type Config struct {
 	Password        string
 	Recursive       bool
 	Force           bool
+	SkipSameSize    bool
 	Verbose         int
 }
 
@@ -304,6 +305,21 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 	var nodes []*mega.Node
 	var node *mega.Node
 
+	if len(*pathsplit) > 0 {
+		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
+	} else {
+		err = EINVALID_PATH
+	}
+
+	if err != nil {
+		return err
+	} else {
+		node = nodes[len(nodes)-1]
+		if node.GetType() != mega.FILE {
+			return ENOT_FILE
+		}
+	}
+
 	fi, err := os.Stat(dstpath)
 	if os.IsNotExist(err) {
 		d := path.Dir(dstpath)
@@ -324,8 +340,13 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 			}
 		}
 
-		_, err := os.Stat(dstpath)
+		info, err := os.Stat(dstpath)
 		if os.IsNotExist(err) == false {
+
+			if mc.cfg.SkipSameSize && info.Size() == node.GetSize() {
+				return nil
+			}
+
 			if mc.cfg.Force {
 				err = os.Remove(dstpath)
 				if err != nil {
@@ -336,21 +357,6 @@ func (mc *MegaClient) Get(srcres, dstpath string) error {
 			}
 		}
 		err = nil
-	}
-
-	if len(*pathsplit) > 0 {
-		nodes, err = mc.mega.FS.PathLookup(root, *pathsplit)
-	} else {
-		err = EINVALID_PATH
-	}
-
-	if err != nil {
-		return err
-	} else {
-		node = nodes[len(nodes)-1]
-		if node.GetType() != mega.FILE {
-			return ENOT_FILE
-		}
 	}
 
 	var ch *chan int
@@ -377,7 +383,7 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 		return EINVALID_SRC
 	}
 
-	if info.Mode() & os.ModeType != 0 {
+	if info.Mode()&os.ModeType != 0 {
 		return ENOT_FILE
 	}
 
@@ -447,6 +453,10 @@ func (mc *MegaClient) Put(srcpath, dstres string) error {
 
 	for _, c := range children {
 		if c.GetName() == name {
+			if mc.cfg.SkipSameSize && info.Size() == c.GetSize() {
+				return nil
+			}
+
 			if mc.cfg.Force {
 				err = mc.mega.Delete(c, false)
 				if err != nil {

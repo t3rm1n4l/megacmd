@@ -16,7 +16,7 @@ import (
 
 const (
 	CONFIG_FILE = ".megacmd.json"
-	VERSION     = "0.01"
+	VERSION     = "0.011"
 	AUTHOR      = "Sarath Lakshman"
 	URL         = "github.com/t3rm1n4l/megacmd"
 )
@@ -52,6 +52,7 @@ func main() {
 		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
+		skipsize  = flag.Bool("skip-same-size", false, "Skip copying of files with same size and path suffix")
 	)
 
 	log.SetFlags(0)
@@ -92,6 +93,10 @@ func main() {
 
 	if *verbose != 1 {
 		conf.Verbose = *verbose
+	}
+
+	if *skipsize {
+		conf.SkipSameSize = true
 	}
 
 	go func() {
