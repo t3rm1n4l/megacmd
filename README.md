@@ -4,12 +4,14 @@ megacmd
 A command-line client for mega.co.nz storage service
 This utility is written on top of [go-mega](http://github.com/t3rm1n4l/go-mega)
 
+Blog post about mega protocol, [http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/](http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/)
+
 ### What is megacmd ?
 Mega (mega.co.nz) is an excellent free storage service which provides 50 GB of free storage space. It has a web based user interface to upload and download files.
 Megacmd is a command-line tool for performing file and directory transfer between local directories and mega service. Features of megacmd are much similar to s3cmd utility, which is used to perform file transfer to Amazon S3.
 
 ### Features
-  - Ability to access files and folders in a directory path access URIs
+  - Ability to access files and folders using a path URI
   - Configuration file (~/.megacmd.json)
   - Individual file put and get operations
   - List operation with recursive mode (shows filesize and timestamp)
@@ -34,6 +36,7 @@ Megacmd is a command-line tool for performing file and directory transfer betwee
       -conf="/Users/slakshman/.megacmd.json": Config file path
       -force=false: Force hard delete or overwrite
       -help=false: Help
+      -ignore-same-size=false: Consider files with same size and path suffix as same
       -recursive=false: Recursive listing
       -verbose=1: Verbose
       -version=false: Version
@@ -47,10 +50,40 @@ Megacmd is a command-line tool for performing file and directory transfer betwee
 
 #### Binaries
 
-[Mac OSX](https://mega.co.nz/#!PR9FSKpQ!ez8HoC-LS4m-hBMPGo2K-jZahYFX6dGG65ReyCKKjk)
+[Mac OSX](https://mega.co.nz/#!HE9THAwL!RzOtsmqpAf31K_6BOBmiDF9j97whf028v7jkMGJpCXI)
 
-[Linux](https://mega.co.nz/#!PR9FSKpQ!ez8HoC-LS4m-hBMPGo2K-jZahYFX6dGG65ReyCKKjkE)
+[Linux](https://mega.co.nz/#!2cNmHZjY!DARXJRmvakZ09Wjvc39GYlUeGzx7aM6NamU2wB9kHM4)
 
+[Windows](https://mega.co.nz/#!uQdDxLhY!dtRe7DfsApiI9EeprNDg-QBgT8JPTL4OwPRC9__-1tw)
+
+### How to run megacmd?
+
+#### Configuration file setup
+
+megacmd uses a json config file to read default settings (~/.megacmd.json). Some of the settings
+are available as command-line options as well. Command-line options can be used
+to turn on options which are already off specified in the default settings passed through config file.
+
+Create a file ~/.megacmd.json with the following json:
+
+    {
+        "User" : "MEGA_USERNAME",
+        "Password" : "MEGA_PASSWORD",
+        "DownloadWorkers" : 4,
+        "UploadWorkers" : 4,
+        "SkipSameSize" : true,
+        "Verbose" : 1
+    }
+
+DownloadWorkers and UploadWorkers specifies how many parallel connections should be used by megacmd.
+You can improve your download/upload by increasing number of connections :)
+
+
+You can add extra parameters as follows to make the default behavior as follows:
+    "Force" : true
+    "Recursive" : true
+
+Once you have setup the config file, you are ready to execute megacmd commands.
 
 ### Pitfalls
 To list directory contents, use:
@@ -73,27 +106,7 @@ To delete a file or folder permanently without moving to trash, use -force optio
 
     $ megacmd -force delete mega:/foo/folder
 
-If you sync command, it will try to copy files to the destination if corresponding files are not present at the destination. It will not overwrite any files if present. It exits by displaying an error message. We can provide -force option with sync command to go forward by overwriting files.
-
-
-### Sample config file
-
-Create a file ~/.megacmd.json with following content.
-
-    {
-        "User" : "MEGA_USERNAME",
-        "Password" : "MEGA_PASSWORD",
-        "DownloadWorkers" : 4,
-        "UploadWorkers" : 4,
-        "Verbose" : 1
-    }
-
-DownloadWorkers and UploadWorkers specifies how many parallel connections should be used by megacmd.
-
-
-You can add extra parameters as follows to make the default behavior as follows:
-    "Force" : true
-    "Recursive" : true
+If you use sync command, it will try to copy files to the destination if corresponding files are not present at the destination. It will not overwrite any files if present. It exits by displaying an error message. We can provide -force option with sync command to continue by overwriting files.
 
 ### Examples
 
@@ -134,6 +147,26 @@ You can add extra parameters as follows to make the default behavior as follows:
 
     $ megacmd delete mega:/testing/x.1
     Successfully deleted  mega:/testing/x.1
+
+### Client package
+
+The megaclient is available as a go package, github.com/t3rm1n4l/megacmd/megaclient.
+Please find the documentation at [megaclient godoc](http://godoc.org/github.com/t3rm1n4l/megacmd/client)
+
+### Unit tests
+
+To execute unit tests, configure a mega account and execute make test as
+follows:
+
+    $ export MEGA_USER=someuser@some.com
+    $ export MEGA_PASSWD=passwd
+    $ make test
+
+### TODO
+
+* Sync deletes
+* Access and manage shared content
+* What next ?
 
 ### License
 
