@@ -115,14 +115,14 @@ func NewMegaClient(conf *Config) (*MegaClient, error) {
 		err = c.mega.SetDownloadWorkers(conf.DownloadWorkers)
 
 		if err == mega.EWORKER_LIMIT_EXCEEDED {
-			err = errors.New(fmt.Sprint("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_DOWNLOAD_WORKERS))
+			err = errors.New(fmt.Sprintf("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_DOWNLOAD_WORKERS))
 		}
 	}
 
 	if conf.UploadWorkers != 0 {
 		err = c.mega.SetUploadWorkers(conf.UploadWorkers)
 		if err == mega.EWORKER_LIMIT_EXCEEDED {
-			err = errors.New(fmt.Sprint("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_UPLOAD_WORKERS))
+			err = errors.New(fmt.Sprintf("%s : %d <= %d", err, conf.DownloadWorkers, mega.MAX_UPLOAD_WORKERS))
 		}
 	}
 

@@ -16,7 +16,7 @@ import (
 
 const (
 	CONFIG_FILE = ".megacmd.json"
-	VERSION     = "0.011"
+	VERSION     = "0.012"
 	AUTHOR      = "Sarath Lakshman"
 	URL         = "github.com/t3rm1n4l/megacmd"
 )
