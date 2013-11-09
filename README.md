@@ -45,8 +45,8 @@ Megacmd is a command-line tool for performing file and directory transfer betwee
 
 #### Compile from source
 
-    $ make
-    $ cp megacmd /usr/local/bin
+    # make
+    # cp megacmd /usr/local/bin
 
 #### Binaries
 
