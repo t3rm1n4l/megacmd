@@ -90,7 +90,7 @@ func getLocalPaths(root string) ([]Path, error) {
 
 func getLookupParams(resource string, fs *mega.MegaFS) (*mega.Node, *[]string, error) {
 	resource = strings.TrimSpace(resource)
-	args := strings.Split(resource, ":")
+	args := strings.SplitN(resource, ":", 2)
 	if len(args) != 2 || !strings.HasPrefix(args[1], "/") {
 		return nil, nil, EINVALID_PATH
 	}
