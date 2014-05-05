@@ -2,3 +2,4 @@
 megacmd
 tests/t.json
 tests/junk
+config.mk

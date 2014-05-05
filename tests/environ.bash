@@ -1,7 +1,7 @@
 #/bin/bash
 
 # Setup environment
-export MEGACMD="../megacmd -conf=t.json -verbose=0"
+export MEGACMD="../$MEGACMD_NAME -conf=t.json -verbose=0"
 
 JUNK="junk"
 OUT="$JUNK/out.txt"
