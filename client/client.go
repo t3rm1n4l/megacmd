@@ -628,8 +628,9 @@ func (mc *MegaClient) Sync(src, dst string) error {
 		}
 		if mc.cfg.Verbose > 0 {
 			if err == EFILE_EXISTS {
-				file := path.Join(dst, spath.GetPath())
-				err = errors.New(fmt.Sprintf("%s - %s", file, EFILE_EXISTS))
+				err = nil;
+				//file := path.Join(dst, spath.GetPath())
+				//err = errors.New(fmt.Sprintf("%s - %s", file, EFILE_EXISTS))
 			}
 		}
 
