@@ -4,6 +4,9 @@ megacmd
 A command-line client for mega.co.nz storage service
 This utility is written on top of [go-mega](http://github.com/t3rm1n4l/go-mega)
 
+[![Build Status](https://secure.travis-ci.org/t3rm1n4l/megacmd.png?branch=master)](http://travis-ci.org/t3rm1n4l/megacmd)
+
+
 Blog post about mega protocol, [http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/](http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/)
 
 ### What is megacmd ?
