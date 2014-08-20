@@ -168,6 +168,10 @@ follows:
 * Access and manage shared content
 * What next ?
 
+### How to Contribute ?
+
+I am looking for developers interested to contribute to this project. There are a bunch of work left to be done in megacmd. Please contact me if you are interested.
+
 ### License
 
 MIT
