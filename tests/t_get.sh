@@ -2,10 +2,10 @@
 . environ.bash
 
 init_env
-silent dd if=/dev/random of=$JUNK/x.1 bs=1k count=50
-silent dd if=/dev/random of=$JUNK/x.2 bs=1k count=100
-silent dd if=/dev/random of=$JUNK/x.3 bs=1k count=500
-silent dd if=/dev/random of=$JUNK/x.4 bs=1k count=1000
+silent dd if=/dev/urandom of=$JUNK/x.1 bs=1k count=50
+silent dd if=/dev/urandom of=$JUNK/x.2 bs=1k count=100
+silent dd if=/dev/urandom of=$JUNK/x.3 bs=1k count=500
+silent dd if=/dev/urandom of=$JUNK/x.4 bs=1k count=1000
 
 run_fail $MEGACMD get mega:/testing/junkx.1 $JUNK/tmp/
 run_fail $MEGACMD get mega:/testing/ $JUNK/tmp/

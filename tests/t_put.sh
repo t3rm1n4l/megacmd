@@ -2,8 +2,8 @@
 . environ.bash
 
 init_env
-silent dd if=/dev/random of=$JUNK/x.1 bs=1k count=50
-silent dd if=/dev/random of=$JUNK/x.2 bs=1k count=100
+silent dd if=/dev/urandom of=$JUNK/x.1 bs=1k count=50
+silent dd if=/dev/urandom of=$JUNK/x.2 bs=1k count=100
 
 
 run $MEGACMD put $JUNK/x.1 mega:/testing/

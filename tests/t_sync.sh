@@ -7,9 +7,9 @@ mkdir -p $JUNK/sync1/dirx/diry/dirz
 mkdir -p $JUNK/sync1/dira
 mkdir -p $JUNK/sync1/dirb/dirc/dird
 
-silent dd if=/dev/random of=$JUNK/sync1/dira/x.1 bs=1k count=1
-silent dd if=/dev/random of=$JUNK/sync1/x.2 bs=1k count=1
-silent dd if=/dev/random of=$JUNK/sync1/dirb/dirc/dird/x.3 bs=1k count=1
+silent dd if=/dev/urandom of=$JUNK/sync1/dira/x.1 bs=1k count=1
+silent dd if=/dev/urandom of=$JUNK/sync1/x.2 bs=1k count=1
+silent dd if=/dev/urandom of=$JUNK/sync1/dirb/dirc/dird/x.3 bs=1k count=1
 
 run_fail $MEGACMD sync nothing mega:/testing/sync
 
