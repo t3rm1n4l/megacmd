@@ -53,6 +53,7 @@ func main() {
 		recursive = flag.Bool("recursive", false, "Recursive listing")
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
 		skipsize  = flag.Bool("skip-same-size", false, "Skip copying of files with same size and path suffix")
+		skiperror = flag.Bool("skip-error", false, "Skip syncing of files that can't be read")
 	)
 
 	log.SetFlags(0)
@@ -97,6 +98,10 @@ func main() {
 
 	if *skipsize {
 		conf.SkipSameSize = true
+	}
+
+	if *skiperror {
+		conf.SkipError = true
 	}
 
 	go func() {

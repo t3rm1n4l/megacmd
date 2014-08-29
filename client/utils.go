@@ -52,14 +52,19 @@ func getRemotePaths(fs *mega.MegaFS, n *mega.Node, recursive bool) []Path {
 	return paths
 }
 
-func getLocalPaths(root string) ([]Path, error) {
+func getLocalPaths(root string, skiperror bool) ([]Path, error) {
 	var paths []Path
 
 	walker := func(p string, info os.FileInfo, err error) error {
 		var x Path
 		p, _ = filepath.Rel(root, p)
+
 		if err != nil {
-			return err
+			if skiperror {
+				return nil
+			} else {
+				return err
+			}
 		}
 
 		if p == "." {

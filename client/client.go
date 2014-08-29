@@ -35,6 +35,7 @@ type Config struct {
 	Recursive       bool
 	Force           bool
 	SkipSameSize    bool
+	SkipError       bool
 	Verbose         int
 }
 
@@ -584,7 +585,7 @@ func (mc *MegaClient) Sync(src, dst string) error {
 			paths = append(paths, getRemotePaths(mc.mega.FS, n, true)...)
 		}
 	} else {
-		paths, err = getLocalPaths(src)
+		paths, err = getLocalPaths(src, mc.cfg.SkipError)
 		if err != nil {
 			return err
 		}
