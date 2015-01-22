@@ -1,11 +1,13 @@
 package megaclient
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/t3rm1n4l/go-humanize"
 	"github.com/t3rm1n4l/go-mega"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -141,9 +143,22 @@ func progressBar(ch chan int, wg *sync.WaitGroup, size int64, src, dst string) {
 	percent := float32(0)
 	elapsed := time.Duration(0)
 	dur := time.Duration(0)
+	var lastLineNum int
+	var fmtStr string
+	var isWin = runtime.GOOS == "windows"
+	if isWin {
+		// windows not support ascii escape code 
+		fmtStr = "\rCopying %s -> %s # %.2f %% of %s at %.4s/s %v "
+	} else {
+		fmtStr = "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v "
+	}
 
 	showProgress := func() {
-		fmt.Fprintf(os.Stdout, "\r\033[2KCopying %s -> %s # %.2f %% of %s at %.4s/s %v ", src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
+		if isWin {
+			// so just print space to clear last line.
+			fmt.Fprintf(os.Stdout, "\r%s", bytes.Repeat([]byte{0x20}, lastLineNum))
+		}
+		lastLineNum,_ = fmt.Fprintf(os.Stdout, fmtStr, src, dst, percent, humanize.Bytes(uint64(size)), humanize.Bytes(bps), dur)
 	}
 
 	showProgress()
