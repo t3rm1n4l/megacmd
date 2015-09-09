@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"os/user"
 	"path"
 	"strings"
 	"time"
+        "github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -44,12 +44,15 @@ const (
 )
 
 func main() {
-	usr, _ := user.Current()
+	homepath, err := homedir.Dir()
+	if err != nil {
+		log.Fatal( err )
+	}
 	var (
 		help      = flag.Bool("help", false, "Help")
 		version   = flag.Bool("version", false, "Version")
 		verbose   = flag.Int("verbose", 1, "Verbose")
-		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
+		config    = flag.String("conf", path.Join(homepath, CONFIG_FILE), "Config file path")
 		recursive = flag.Bool("recursive", false, "Recursive listing")
 		force     = flag.Bool("force", false, "Force hard delete or overwrite")
 		skipsize  = flag.Bool("skip-same-size", false, "Skip copying of files with same size and path suffix")
@@ -79,7 +82,7 @@ func main() {
 	}
 
 	conf := new(megaclient.Config)
-	err := conf.Parse(*config)
+	err = conf.Parse(*config)
 	if err != nil {
 		log.Fatal(err)
 	}
