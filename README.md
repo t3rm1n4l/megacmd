@@ -1,6 +1,8 @@
 megacmd
 =======
 
+**This project is no longer maintained**
+
 A command-line client for mega.co.nz storage service
 This utility is written on top of [go-mega](http://github.com/t3rm1n4l/go-mega)
 
