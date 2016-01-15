@@ -9,7 +9,7 @@ This utility is written on top of [go-mega](http://github.com/t3rm1n4l/go-mega)
 [![Build Status](https://secure.travis-ci.org/t3rm1n4l/megacmd.png?branch=master)](http://travis-ci.org/t3rm1n4l/megacmd)
 
 
-Blog post about mega protocol, [http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/](http://www.sarathlakshman.com/2013/06/14/megacmd-a-mega-co-nz-storage-service-command-line-client/)
+Blog post about mega protocol, [http://www.sarathlakshman.com/2013/06/14/mega-cloud-storage-commandline-client](http://www.sarathlakshman.com/2013/06/14/mega-cloud-storage-commandline-client)
 
 ### What is megacmd ?
 Mega (mega.co.nz) is an excellent free storage service which provides 50 GB of free storage space. It has a web based user interface to upload and download files.
