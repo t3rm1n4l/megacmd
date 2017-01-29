@@ -48,6 +48,8 @@ Megacmd is a command-line tool for performing file and directory transfer betwee
 
 ### How to obtain megacmd ?
 
+Note: You require the package golang!
+
 #### Compile from source
 
     $ make
