@@ -25,3 +25,9 @@ clean:
 test: build
 	./tests/run_tests.sh $(EXECUTABLE)
 
+test_release:
+	goreleaser --skip-publish --rm-dist --snapshot
+
+release:
+	goreleaser --rm-dist
+

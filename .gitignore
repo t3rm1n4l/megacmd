@@ -2,4 +2,6 @@
 megacmd
 tests/t.json
 tests/junk
+tests/x.1
 config.mk
+/dist/*

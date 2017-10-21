@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/t3rm1n4l/go-mega"
-	"github.com/t3rm1n4l/megacmd/client"
 	"log"
 	"os"
 	"os/signal"
@@ -12,11 +10,18 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/t3rm1n4l/go-mega"
+	"github.com/t3rm1n4l/megacmd/client"
+)
+
+var (
+	version = "0.012"
+	commit  = ""
 )
 
 const (
 	CONFIG_FILE = ".megacmd.json"
-	VERSION     = "0.012"
 	AUTHOR      = "Sarath Lakshman"
 	URL         = "github.com/t3rm1n4l/megacmd"
 )
@@ -46,14 +51,14 @@ const (
 func main() {
 	usr, _ := user.Current()
 	var (
-		help      = flag.Bool("help", false, "Help")
-		version   = flag.Bool("version", false, "Version")
-		verbose   = flag.Int("verbose", 1, "Verbose")
-		config    = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
-		recursive = flag.Bool("recursive", false, "Recursive listing")
-		force     = flag.Bool("force", false, "Force hard delete or overwrite")
-		skipsize  = flag.Bool("skip-same-size", false, "Skip copying of files with same size and path suffix")
-		skiperror = flag.Bool("skip-error", false, "Skip syncing of files that can't be read")
+		help        = flag.Bool("help", false, "Help")
+		showVersion = flag.Bool("version", false, "Version")
+		verbose     = flag.Int("verbose", 1, "Verbose")
+		config      = flag.String("conf", path.Join(usr.HomeDir, CONFIG_FILE), "Config file path")
+		recursive   = flag.Bool("recursive", false, "Recursive listing")
+		force       = flag.Bool("force", false, "Force hard delete or overwrite")
+		skipsize    = flag.Bool("skip-same-size", false, "Skip copying of files with same size and path suffix")
+		skiperror   = flag.Bool("skip-error", false, "Skip syncing of files that can't be read")
 	)
 
 	log.SetFlags(0)
@@ -66,8 +71,11 @@ func main() {
 
 	flag.Parse()
 
-	if *version {
-		fmt.Println("Version : ", VERSION)
+	if *showVersion {
+		fmt.Println("Version : ", version)
+		if commit != "" {
+			fmt.Println("Commit  : ", commit)
+		}
 		fmt.Println("Author  : ", AUTHOR)
 		fmt.Println("Github  : ", URL)
 		os.Exit(0)
