@@ -19,6 +19,7 @@ test_release:
 	goreleaser --skip-publish --rm-dist --snapshot
 
 release:
+	git push --tags
 	goreleaser --rm-dist
 
 # Get the build dependencies
