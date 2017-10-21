@@ -55,7 +55,7 @@ Megacmd is a command-line tool for performing file and directory transfer betwee
 
 #### Binaries
 
-The latest binaries can be found [on the releases page](https://github.com/t3rm1n4l/go-mega/releases/latest).
+The latest binaries can be found [on the releases page](https://github.com/t3rm1n4l/megacmd/releases/latest).
 
 ### How to run megacmd?
 
