@@ -1,4 +1,5 @@
---- 
+language: go
+sudo: false
 env: 
   matrix: 
     secure: |-
@@ -7,4 +8,11 @@ env:
       3x5xrMxWWeUx+jp5KauktA2T8kUrOuaebcef+8dSGE10a0E1WhA=
 notifications: 
   email: false
-script: make build && make test
+install:
+- make build_dep
+script:
+- make build
+- make check
+- make test
+notifications:
+  email: false
