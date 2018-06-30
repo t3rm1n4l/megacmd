@@ -64,8 +64,8 @@ func main() {
 	log.SetFlags(0)
 
 	var Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage %s:", os.Args[0])
-		fmt.Fprintf(os.Stderr, USAGE)
+		_, _ = fmt.Fprintf(os.Stderr, "Usage %s:", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, USAGE)
 		flag.PrintDefaults()
 	}
 
