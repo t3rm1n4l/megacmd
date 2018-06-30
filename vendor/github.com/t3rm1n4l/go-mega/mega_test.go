@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 	"testing"
 	"time"
 )
@@ -35,8 +36,16 @@ func retry(t *testing.T, what string, fn func() error) {
 	t.Fatalf("%s failed: %v", what, err)
 }
 
+func skipIfNoCredentials(t *testing.T) {
+	if USER == "" || PASSWORD == "" {
+		t.Skip("MEGA_USER and MEGA_PASSWD not set - skipping integration tests")
+	}
+}
+
 func initSession(t *testing.T) *Mega {
+	skipIfNoCredentials(t)
 	m := New()
+	// m.SetDebugger(log.Printf)
 	retry(t, "Login", func() error {
 		return m.Login(USER, PASSWORD)
 	})
@@ -112,6 +121,8 @@ func fileMD5(t *testing.T, name string) string {
 }
 
 func TestLogin(t *testing.T) {
+	skipIfNoCredentials(t)
+
 	m := New()
 	retry(t, "Login", func() error {
 		return m.Login(USER, PASSWORD)
@@ -130,11 +141,13 @@ func TestUploadDownload(t *testing.T) {
 	session := initSession(t)
 	node, name, h1 := uploadFile(t, session, 314573, session.FS.root)
 
+	session.FS.mutex.Lock()
 	phash := session.FS.root.hash
 	n := session.FS.lookup[node.hash]
 	if n.parent.hash != phash {
 		t.Error("Parent of uploaded file mismatch")
 	}
+	session.FS.mutex.Unlock()
 
 	err := session.DownloadFile(node, name, nil)
 	if err != nil {
@@ -163,10 +176,12 @@ func TestMove(t *testing.T) {
 		t.Fatal("Move failed", err)
 	}
 
+	session.FS.mutex.Lock()
 	n := session.FS.lookup[hash]
 	if n.parent.hash != phash {
 		t.Error("Move happened to wrong parent", phash, n.parent.hash)
 	}
+	session.FS.mutex.Unlock()
 }
 
 func TestRename(t *testing.T) {
@@ -178,10 +193,12 @@ func TestRename(t *testing.T) {
 		t.Fatal("Rename failed", err)
 	}
 
+	session.FS.mutex.Lock()
 	newname := session.FS.lookup[node.hash].name
 	if newname != "newname.txt" {
 		t.Error("Renamed to wrong name", newname)
 	}
+	session.FS.mutex.Unlock()
 }
 
 func TestDelete(t *testing.T) {
@@ -192,18 +209,24 @@ func TestDelete(t *testing.T) {
 		return session.Delete(node, false)
 	})
 
+	session.FS.mutex.Lock()
 	node = session.FS.lookup[node.hash]
 	if node.parent != session.FS.trash {
 		t.Error("Expects file to be moved to trash")
 	}
+	session.FS.mutex.Unlock()
 
 	retry(t, "Hard delete", func() error {
 		return session.Delete(node, true)
 	})
 
+	time.Sleep(1 * time.Second) // wait for the event
+
+	session.FS.mutex.Lock()
 	if _, ok := session.FS.lookup[node.hash]; ok {
 		t.Error("Expects file to be dissapeared")
 	}
+	session.FS.mutex.Unlock()
 }
 
 func TestCreateDir(t *testing.T) {
@@ -211,13 +234,17 @@ func TestCreateDir(t *testing.T) {
 	node := createDir(t, session, "testdir1", session.FS.root)
 	node2 := createDir(t, session, "testdir2", node)
 
+	session.FS.mutex.Lock()
 	nnode2 := session.FS.lookup[node2.hash]
 	if nnode2.parent.hash != node.hash {
 		t.Error("Wrong directory parent")
 	}
+	session.FS.mutex.Unlock()
 }
 
 func TestConfig(t *testing.T) {
+	skipIfNoCredentials(t)
+
 	m := New()
 	m.SetAPIUrl("http://invalid.domain")
 	err := m.Login(USER, PASSWORD)
@@ -297,7 +324,7 @@ func TestEventNotify(t *testing.T) {
 
 	for i := 0; i < 60; i++ {
 		time.Sleep(time.Second * 1)
-		node = session2.FS.HashLookup(node.hash)
+		node = session2.FS.HashLookup(node.GetHash())
 		if node != nil {
 			break
 		}
@@ -333,4 +360,44 @@ func TestExportLink(t *testing.T) {
 		_, err := session.Link(node, true)
 		return err
 	})
+}
+
+func TestWaitEvents(t *testing.T) {
+	m := &Mega{}
+	m.SetLogger(t.Logf)
+	m.SetDebugger(t.Logf)
+	var wg sync.WaitGroup
+	// in the background fire the event timer after 100mS
+	wg.Add(1)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		m.waitEventsFire()
+		wg.Done()
+	}()
+	wait := func(d time.Duration, pb *bool) {
+		e := m.WaitEventsStart()
+		*pb = m.WaitEvents(e, d)
+		wg.Done()
+	}
+	// wait for each event in a separate goroutine
+	var b1, b2, b3 bool
+	wg.Add(3)
+	go wait(10*time.Second, &b1)
+	go wait(2*time.Second, &b2)
+	go wait(1*time.Millisecond, &b3)
+	wg.Wait()
+	if b1 != false {
+		t.Errorf("Unexpected timeout for b1")
+	}
+	if b2 != false {
+		t.Errorf("Unexpected timeout for b2")
+	}
+	if b3 != true {
+		t.Errorf("Unexpected event for b3")
+	}
+	if m.waitEvents != nil {
+		t.Errorf("Expecting waitEvents to be empty")
+	}
+	// Check nothing happens if we fire the event with no listeners
+	m.waitEventsFire()
 }

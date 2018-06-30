@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -249,31 +250,32 @@ func decryptSessionId(privk []byte, csid []byte, mk []byte) ([]byte, error) {
 
 }
 
-func getChunkSizes(size int) map[int]int {
-	chunks := make(map[int]int)
-	p, pp := 0, 0
-	// i = 0 loop is useless
-	for i := 1; i <= 8 && p < size-i*131072; i++ {
-		chunks[p] = i * 131072
-		pp = p
-		p += chunks[p]
-	}
+// chunkSize describes a size and position of chunk
+type chunkSize struct {
+	position int64
+	size     int
+}
 
-	for p < size {
-		chunks[p] = 1048576
-		pp = p
-		p += chunks[p]
+func getChunkSizes(size int64) (chunks []chunkSize) {
+	p := int64(0)
+	for i := 1; size > 0; i++ {
+		var chunk int
+		if i <= 8 {
+			chunk = i * 131072
+		} else {
+			chunk = 1048576
+		}
+		if size < int64(chunk) {
+			chunk = int(size)
+		}
+		chunks = append(chunks, chunkSize{position: p, size: chunk})
+		p += int64(chunk)
+		size -= int64(chunk)
 	}
-
-	chunks[pp] = size - pp
-	// Is this even possible? I think pp == size is never possible for
-	// any size > 0.
-	if chunks[pp] == 0 {
-		delete(chunks, pp)
-	}
-
 	return chunks
 }
+
+var attrMatch = regexp.MustCompile(`{".*"}`)
 
 func decryptAttr(key []byte, data []byte) (attr FileAttr, err error) {
 	err = EBADATTR
@@ -288,6 +290,10 @@ func decryptAttr(key []byte, data []byte) (attr FileAttr, err error) {
 
 	if string(buf[:4]) == "MEGA" {
 		str := strings.TrimRight(string(buf[4:]), "\x00")
+		trimmed := attrMatch.FindString(str)
+		if trimmed != "" {
+			str = trimmed
+		}
 		err = json.Unmarshal([]byte(str), &attr)
 	}
 	return attr, err

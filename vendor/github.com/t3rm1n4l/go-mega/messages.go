@@ -31,6 +31,24 @@ type UserResp struct {
 	TS    string `json:"ts"`
 }
 
+type QuotaMsg struct {
+	// Action, should be "uq" for quota request
+	Cmd string `json:"a"`
+	// xfer should be 1
+	Xfer int `json:"xfer"`
+	// Without strg=1 only reports total capacity for account
+	Strg int `json:"strg,omitempty"`
+}
+
+type QuotaResp struct {
+	// Mstrg is total capacity in bytes
+	Mstrg uint64 `json:"mstrg"`
+	// Cstrg is used capacity in bytes
+	Cstrg uint64 `json:"cstrg"`
+	// Per folder usage in bytes?
+	Cstrgn map[string][]int64 `json:"cstrgn"`
+}
+
 type FilesMsg struct {
 	Cmd string `json:"a"`
 	C   int    `json:"c"`

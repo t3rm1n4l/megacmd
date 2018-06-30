@@ -11,7 +11,7 @@
   branch = "master"
   name = "github.com/t3rm1n4l/go-mega"
   packages = ["."]
-  revision = "6ca0555ea874718fe3b34efef603b21bf7ebca87"
+  revision = "57978a63bd3f91fa7e188b751a7e7e6dd4e33813"
 
 [solve-meta]
   analyzer-name = "dep"
