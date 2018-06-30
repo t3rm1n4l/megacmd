@@ -1,7 +1,11 @@
 megacmd
 =======
 
-**This project is no longer maintained**
+**This project is no longer fully maintained**
+
+I'm ([@ncw](https://github.com/ncw)) doing light maintenance on
+megacmd, but mainly on the underlying go-mega library which I'm using
+to provide a mega backend for [rclone](https://github.com/ncw/rclone).
 
 A command-line client for mega.co.nz storage service
 This utility is written on top of [go-mega](http://github.com/t3rm1n4l/go-mega)
