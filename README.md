@@ -155,7 +155,7 @@ If you use sync command, it will try to copy files to the destination if corresp
 
 ### Client package
 
-The megaclient is available as a go package, github.com/t3rm1n4l/megacmd/megaclient.
+The megaclient is available as a go package, github.com/t3rm1n4l/megacmd/client.
 Please find the documentation at [megaclient godoc](http://godoc.org/github.com/t3rm1n4l/megacmd/client)
 
 ### Unit tests
