@@ -2,16 +2,32 @@ package mega
 
 import "encoding/json"
 
+type PreloginMsg struct {
+	Cmd  string `json:"a"`
+	User string `json:"user"`
+}
+
+type PreloginResp struct {
+	Version int    `json:"v"`
+	Salt    string `json:"s"`
+}
+
 type LoginMsg struct {
-	Cmd    string `json:"a"`
-	User   string `json:"user"`
-	Handle string `json:"uh"`
+	Cmd        string `json:"a"`
+	User       string `json:"user"`
+	Handle     string `json:"uh"`
+	SessionKey string `json:"sek,omitempty"`
+	Si         string `json:"si,omitempty"`
+	Mfa        string `json:"mfa,omitempty"`
 }
 
 type LoginResp struct {
-	Csid  string `json:"csid"`
-	Privk string `json:"privk"`
-	Key   string `json:"k"`
+	Csid       string `json:"csid"`
+	Privk      string `json:"privk"`
+	Key        string `json:"k"`
+	Ach        int    `json:"ach"`
+	SessionKey string `json:"sek"`
+	U          string `json:"u"`
 }
 
 type UserMsg struct {
@@ -104,10 +120,10 @@ type DownloadMsg struct {
 }
 
 type DownloadResp struct {
-	G    string `json:"g"`
-	Size uint64 `json:"s"`
-	Attr string `json:"at"`
-	Err  uint32 `json:"e"`
+	G    string   `json:"g"`
+	Size uint64   `json:"s"`
+	Attr string   `json:"at"`
+	Err  ErrorMsg `json:"e"`
 }
 
 type UploadMsg struct {
