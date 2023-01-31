@@ -24,9 +24,10 @@ release:
 
 # Get the build dependencies
 build_dep:
-	go get -u github.com/kisielk/errcheck
-	go get -u golang.org/x/tools/cmd/goimports
-	go get -u github.com/golang/lint/golint
+	go mod tidy
+	#go get -u github.com/kisielk/errcheck
+	#go get -u golang.org/x/tools/cmd/goimports
+	#go get -u github.com/golang/lint/golint
 
 # Do source code quality checks
 check:
