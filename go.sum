@@ -1,0 +1,6 @@
+github.com/t3rm1n4l/go-humanize v0.0.0-20121229052809-e7ed15be05eb h1:Y3ZZPZq8LFM+Hd3jIMAB9hdUvqMgUYoPL+An9kj9m8I=
+github.com/t3rm1n4l/go-humanize v0.0.0-20121229052809-e7ed15be05eb/go.mod h1:RKcvJ+wnT/VTNZ92WydAGo1jX2nN3AuHqWmD2zTysF0=
+github.com/t3rm1n4l/go-mega v0.0.0-20220725095014-c4e0c2b5debf h1:Y43S3e9P1NPs/QF4R5/SdlXj2d31540hP4Gk8VKNvDg=
+github.com/t3rm1n4l/go-mega v0.0.0-20220725095014-c4e0c2b5debf/go.mod h1:c+cGNU1qi9bO7ZF4IRMYk+KaZTNiQ/gQrSbyMmGFq1Q=
+golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613 h1:MQ/ZZiDsUapFFiMS+vzwXkCTeEKaum+Do5rINYJDmxc=
+golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

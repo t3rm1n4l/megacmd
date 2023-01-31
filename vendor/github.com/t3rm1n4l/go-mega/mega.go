@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha512"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // Default settings
@@ -93,12 +96,16 @@ func (c *config) SetUploadWorkers(w int) error {
 
 type Mega struct {
 	config
+	// Version of the account
+	accountVersion int
+	// Salt for the account if accountVersion > 1
+	accountSalt []byte
 	// Sequence number
 	sn int64
 	// Server state sn
 	ssn string
 	// Session ID
-	sid []byte
+	sid string
 	// Master key
 	k []byte
 	// User handle
@@ -329,7 +336,10 @@ func newMegaFS() *MegaFS {
 
 func New() *Mega {
 	max := big.NewInt(0x100000000)
-	bigx, _ := rand.Int(rand.Reader, max)
+	bigx, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		panic(err) // this should be returned, but this is a public interface
+	}
 	cfg := newConfig()
 	mgfs := newMegaFS()
 	m := &Mega{
@@ -397,8 +407,8 @@ func (m *Mega) api_request(r []byte) (buf []byte, err error) {
 
 	url := fmt.Sprintf("%s/cs?id=%d", m.baseurl, m.sn)
 
-	if m.sid != nil {
-		url = fmt.Sprintf("%s&sid=%s", url, string(m.sid))
+	if m.sid != "" {
+		url = fmt.Sprintf("%s&sid=%s", url, m.sid)
 	}
 
 	sleepTime := minSleepTime // inital backoff time
@@ -457,25 +467,21 @@ func (m *Mega) api_request(r []byte) (buf []byte, err error) {
 	return nil, err
 }
 
-// Authenticate and start a session
-func (m *Mega) Login(email string, passwd string) error {
-	var msg [1]LoginMsg
-	var res [1]LoginResp
-	var err error
-	var result []byte
+// prelogin call
+func (m *Mega) prelogin(email string) error {
+	var msg [1]PreloginMsg
+	var res [1]PreloginResp
 
-	passkey := password_key(passwd)
-	uhandle := stringhash(email, passkey)
-	m.uh = make([]byte, len(uhandle))
-	copy(m.uh, uhandle)
+	email = strings.ToLower(email) // mega uses lowercased emails for login purposes - FIXME is this true for prelogin?
 
-	msg[0].Cmd = "us"
+	msg[0].Cmd = "us0"
 	msg[0].User = email
-	msg[0].Handle = string(uhandle)
 
-	req, _ := json.Marshal(msg)
-	result, err = m.api_request(req)
-
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	result, err := m.api_request(req)
 	if err != nil {
 		return err
 	}
@@ -485,10 +491,101 @@ func (m *Mega) Login(email string, passwd string) error {
 		return err
 	}
 
-	m.k = base64urldecode([]byte(res[0].Key))
+	if res[0].Version == 0 {
+		return errors.New("prelogin: no version returned")
+	} else if res[0].Version > 2 {
+		return fmt.Errorf("prelogin: version %d account not supported", res[0].Version)
+	} else if res[0].Version == 2 {
+		if len(res[0].Salt) == 0 {
+			return errors.New("prelogin: no salt returned")
+		}
+		m.accountSalt, err = base64urldecode(res[0].Salt)
+		if err != nil {
+			return err
+		}
+	}
+	m.accountVersion = res[0].Version
+
+	return nil
+}
+
+// Authenticate and start a session
+func (m *Mega) login(email string, passwd string) error {
+	var msg [1]LoginMsg
+	var res [1]LoginResp
+	var err error
+	var result []byte
+
+	email = strings.ToLower(email) // mega uses lowercased emails for login purposes
+
+	passkey, err := password_key(passwd)
+	if err != nil {
+		return err
+	}
+	uhandle, err := stringhash(email, passkey)
+	if err != nil {
+		return err
+	}
+	m.uh = make([]byte, len(uhandle))
+	copy(m.uh, uhandle)
+
+	msg[0].Cmd = "us"
+	msg[0].User = email
+	if m.accountVersion == 1 {
+		msg[0].Handle = uhandle
+	} else {
+		const derivedKeyLength = 2 * aes.BlockSize
+		derivedKey := pbkdf2.Key([]byte(passwd), m.accountSalt, 100000, derivedKeyLength, sha512.New)
+		authKey := derivedKey[aes.BlockSize:]
+		passkey = derivedKey[:aes.BlockSize]
+
+		sessionKey := make([]byte, aes.BlockSize)
+		_, err = rand.Read(sessionKey)
+		if err != nil {
+			return err
+		}
+		msg[0].Handle = base64urlencode(authKey)
+		msg[0].SessionKey = base64urlencode(sessionKey)
+	}
+
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	result, err = m.api_request(req)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(result, &res)
+	if err != nil {
+		return err
+	}
+
+	m.k, err = base64urldecode(res[0].Key)
+	if err != nil {
+		return err
+	}
 	cipher, err := aes.NewCipher(passkey)
+	if err != nil {
+		return err
+	}
 	cipher.Decrypt(m.k, m.k)
-	m.sid, err = decryptSessionId([]byte(res[0].Privk), []byte(res[0].Csid), m.k)
+	m.sid, err = decryptSessionId(res[0].Privk, res[0].Csid, m.k)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Authenticate and start a session
+func (m *Mega) Login(email string, passwd string) error {
+	err := m.prelogin(email)
+	if err != nil {
+		return err
+	}
+
+	err = m.login(email, passwd)
 	if err != nil {
 		return err
 	}
@@ -557,9 +654,11 @@ func (m *Mega) GetUser() (UserResp, error) {
 
 	msg[0].Cmd = "ug"
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return res[0], err
+	}
 	result, err := m.api_request(req)
-
 	if err != nil {
 		return res[0], err
 	}
@@ -577,7 +676,10 @@ func (m *Mega) GetQuota() (QuotaResp, error) {
 	msg[0].Xfer = 1
 	msg[0].Strg = 1
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return res[0], err
+	}
 	result, err := m.api_request(req)
 	if err != nil {
 		return res[0], err
@@ -594,65 +696,120 @@ func (m *Mega) addFSNode(itm FSNode) (*Node, error) {
 	var node, parent *Node
 	var err error
 
-	master_aes, _ := aes.NewCipher(m.k)
+	master_aes, err := aes.NewCipher(m.k)
+	if err != nil {
+		return nil, err
+	}
 
 	switch {
 	case itm.T == FOLDER || itm.T == FILE:
 		args := strings.Split(itm.Key, ":")
+		if len(args) < 2 {
+			return nil, fmt.Errorf("not enough : in item.Key: %q", itm.Key)
+		}
+		itemUser, itemKey := args[0], args[1]
+		itemKeyParts := strings.Split(itemKey, "/")
+		if len(itemKeyParts) >= 2 {
+			itemKey = itemKeyParts[0]
+			// the other part is maybe a share key handle?
+		}
 
 		switch {
 		// File or folder owned by current user
-		case args[0] == itm.User:
-			buf := base64urldecode([]byte(args[1]))
+		case itemUser == itm.User:
+			buf, err := base64urldecode(itemKey)
+			if err != nil {
+				return nil, err
+			}
 			err = blockDecrypt(master_aes, buf, buf)
 			if err != nil {
 				return nil, err
 			}
-			compkey = bytes_to_a32(buf)
+			compkey, err = bytes_to_a32(buf)
+			if err != nil {
+				return nil, err
+			}
 			// Shared folder
 		case itm.SUser != "" && itm.SKey != "":
-			sk := base64urldecode([]byte(itm.SKey))
+			sk, err := base64urldecode(itm.SKey)
+			if err != nil {
+				return nil, err
+			}
 			err = blockDecrypt(master_aes, sk, sk)
 			if err != nil {
 				return nil, err
 			}
-			sk_aes, _ := aes.NewCipher(sk)
+			sk_aes, err := aes.NewCipher(sk)
+			if err != nil {
+				return nil, err
+			}
 
 			m.FS.skmap[itm.Hash] = itm.SKey
-			buf := base64urldecode([]byte(args[1]))
+			buf, err := base64urldecode(itemKey)
+			if err != nil {
+				return nil, err
+			}
 			err = blockDecrypt(sk_aes, buf, buf)
 			if err != nil {
 				return nil, err
 			}
-			compkey = bytes_to_a32(buf)
+			compkey, err = bytes_to_a32(buf)
+			if err != nil {
+				return nil, err
+			}
 			// Shared file
 		default:
-			k := m.FS.skmap[args[0]]
-			b := base64urldecode([]byte(k))
+			k, ok := m.FS.skmap[itemUser]
+			if !ok {
+				return nil, errors.New("couldn't find decryption key for shared file")
+			}
+			b, err := base64urldecode(k)
+			if err != nil {
+				return nil, err
+			}
 			err = blockDecrypt(master_aes, b, b)
 			if err != nil {
 				return nil, err
 			}
-			block, _ := aes.NewCipher(b)
-			buf := base64urldecode([]byte(args[1]))
+			block, err := aes.NewCipher(b)
+			if err != nil {
+				return nil, err
+			}
+			buf, err := base64urldecode(itemKey)
+			if err != nil {
+				return nil, err
+			}
 			err = blockDecrypt(block, buf, buf)
 			if err != nil {
 				return nil, err
 			}
-			compkey = bytes_to_a32(buf)
+			compkey, err = bytes_to_a32(buf)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		switch {
 		case itm.T == FILE:
+			if len(compkey) < 8 {
+				m.logf("ignoring item: compkey too short (%d): %#v", len(compkey), itm)
+				return nil, nil
+			}
 			key = []uint32{compkey[0] ^ compkey[4], compkey[1] ^ compkey[5], compkey[2] ^ compkey[6], compkey[3] ^ compkey[7]}
 		default:
 			key = compkey
 		}
 
-		attr, err = decryptAttr(a32_to_bytes(key), []byte(itm.Attr))
-		// FIXME:
+		bkey, err := a32_to_bytes(key)
 		if err != nil {
+			// FIXME:
 			attr.Name = "BAD ATTRIBUTE"
+		} else {
+			attr, err = decryptAttr(bkey, itm.Attr)
+			// FIXME:
+			if err != nil {
+				attr.Name = "BAD ATTRIBUTE"
+			}
 		}
 	}
 
@@ -692,15 +849,33 @@ func (m *Mega) addFSNode(itm FSNode) (*Node, error) {
 	switch {
 	case itm.T == FILE:
 		var meta NodeMeta
-		meta.key = a32_to_bytes(key)
-		meta.iv = a32_to_bytes([]uint32{compkey[4], compkey[5], 0, 0})
-		meta.mac = a32_to_bytes([]uint32{compkey[6], compkey[7]})
-		meta.compkey = a32_to_bytes(compkey)
+		meta.key, err = a32_to_bytes(key)
+		if err != nil {
+			return nil, err
+		}
+		meta.iv, err = a32_to_bytes([]uint32{compkey[4], compkey[5], 0, 0})
+		if err != nil {
+			return nil, err
+		}
+		meta.mac, err = a32_to_bytes([]uint32{compkey[6], compkey[7]})
+		if err != nil {
+			return nil, err
+		}
+		meta.compkey, err = a32_to_bytes(compkey)
+		if err != nil {
+			return nil, err
+		}
 		node.meta = meta
 	case itm.T == FOLDER:
 		var meta NodeMeta
-		meta.key = a32_to_bytes(key)
-		meta.compkey = a32_to_bytes(compkey)
+		meta.key, err = a32_to_bytes(key)
+		if err != nil {
+			return nil, err
+		}
+		meta.compkey, err = a32_to_bytes(compkey)
+		if err != nil {
+			return nil, err
+		}
 		node.meta = meta
 	case itm.T == ROOT:
 		attr.Name = "Cloud Drive"
@@ -737,9 +912,11 @@ func (m *Mega) getFileSystem() error {
 	msg[0].Cmd = "f"
 	msg[0].C = 1
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
 	result, err := m.api_request(req)
-
 	if err != nil {
 		return err
 	}
@@ -756,7 +933,8 @@ func (m *Mega) getFileSystem() error {
 	for _, itm := range res[0].F {
 		_, err = m.addFSNode(itm)
 		if err != nil {
-			return err
+			m.debugf("couldn't decode FSNode %#v: %v ", itm, err)
+			continue
 		}
 	}
 
@@ -817,7 +995,12 @@ func (m *Mega) NewDownload(src *Node) (*Download, error) {
 		return nil, err
 	}
 
-	_, err = decryptAttr(key, []byte(res[0].Attr))
+	// DownloadResp has an embedded error in it for some reason
+	if res[0].Err != 0 {
+		return nil, parseError(res[0].Err)
+	}
+
+	_, err = decryptAttr(key, res[0].Attr)
 	if err != nil {
 		return nil, err
 	}
@@ -831,9 +1014,15 @@ func (m *Mega) NewDownload(src *Node) (*Download, error) {
 
 	mac_enc := cipher.NewCBCEncrypter(aes_block, zero_iv)
 	m.FS.mutex.Lock()
-	t := bytes_to_a32(src.meta.iv)
+	t, err := bytes_to_a32(src.meta.iv)
 	m.FS.mutex.Unlock()
-	iv := a32_to_bytes([]uint32{t[0], t[1], t[0], t[1]})
+	if err != nil {
+		return nil, err
+	}
+	iv, err := a32_to_bytes([]uint32{t[0], t[1], t[0], t[1]})
+	if err != nil {
+		return nil, err
+	}
 
 	d := &Download{
 		m:           m,
@@ -915,10 +1104,17 @@ func (d *Download) DownloadChunk(id int) (chunk []byte, err error) {
 	}
 
 	// Decrypt the block
-	ctr_iv := bytes_to_a32(d.src.meta.iv)
+	ctr_iv, err := bytes_to_a32(d.src.meta.iv)
+	if err != nil {
+		return nil, err
+	}
 	ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
 	ctr_iv[3] = uint32(chk_start / 0x10)
-	ctr_aes := cipher.NewCTR(d.aes_block, a32_to_bytes(ctr_iv))
+	bctr_iv, err := a32_to_bytes(ctr_iv)
+	if err != nil {
+		return nil, err
+	}
+	ctr_aes := cipher.NewCTR(d.aes_block, bctr_iv)
 	ctr_aes.XORKeyStream(chunk, chunk)
 
 	// Update the chunk_macs
@@ -958,8 +1154,15 @@ func (d *Download) Finish() (err error) {
 		d.mac_enc.CryptBlocks(mac_data, v)
 	}
 
-	tmac := bytes_to_a32(mac_data)
-	if bytes.Equal(a32_to_bytes([]uint32{tmac[0] ^ tmac[1], tmac[2] ^ tmac[3]}), d.src.meta.mac) == false {
+	tmac, err := bytes_to_a32(mac_data)
+	if err != nil {
+		return err
+	}
+	btmac, err := a32_to_bytes([]uint32{tmac[0] ^ tmac[1], tmac[2] ^ tmac[3]})
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(btmac, d.src.meta.mac) == false {
 		return EMACMISMATCH
 	}
 
@@ -1111,12 +1314,24 @@ func (m *Mega) NewUpload(parent *Node, name string, fileSize int64) (*Upload, er
 
 	}
 
-	kbytes := a32_to_bytes(ukey[:4])
-	kiv := a32_to_bytes([]uint32{ukey[4], ukey[5], 0, 0})
-	aes_block, _ := aes.NewCipher(kbytes)
+	kbytes, err := a32_to_bytes(ukey[:4])
+	if err != nil {
+		return nil, err
+	}
+	kiv, err := a32_to_bytes([]uint32{ukey[4], ukey[5], 0, 0})
+	if err != nil {
+		return nil, err
+	}
+	aes_block, err := aes.NewCipher(kbytes)
+	if err != nil {
+		return nil, err
+	}
 
 	mac_enc := cipher.NewCBCEncrypter(aes_block, zero_iv)
-	iv := a32_to_bytes([]uint32{ukey[4], ukey[5], ukey[4], ukey[5]})
+	iv, err := a32_to_bytes([]uint32{ukey[4], ukey[5], ukey[4], ukey[5]})
+	if err != nil {
+		return nil, err
+	}
 
 	chunks := getChunkSizes(fileSize)
 
@@ -1166,10 +1381,17 @@ func (u *Upload) UploadChunk(id int, chunk []byte) (err error) {
 	if len(chunk) != chk_size {
 		return errors.New("upload chunk is wrong size")
 	}
-	ctr_iv := bytes_to_a32(u.kiv)
+	ctr_iv, err := bytes_to_a32(u.kiv)
+	if err != nil {
+		return err
+	}
 	ctr_iv[2] = uint32(uint64(chk_start) / 0x1000000000)
 	ctr_iv[3] = uint32(chk_start / 0x10)
-	ctr_aes := cipher.NewCTR(u.aes_block, a32_to_bytes(ctr_iv))
+	bctr_iv, err := a32_to_bytes(ctr_iv)
+	if err != nil {
+		return err
+	}
+	ctr_aes := cipher.NewCTR(u.aes_block, bctr_iv)
 
 	enc := cipher.NewCBCEncrypter(u.aes_block, u.iv)
 
@@ -1247,7 +1469,10 @@ func (u *Upload) Finish() (node *Node, err error) {
 		u.mac_enc.CryptBlocks(mac_data, v)
 	}
 
-	t := bytes_to_a32(mac_data)
+	t, err := bytes_to_a32(mac_data)
+	if err != nil {
+		return nil, err
+	}
 	meta_mac := []uint32{t[0] ^ t[1], t[2] ^ t[3]}
 
 	attr := FileAttr{u.name}
@@ -1261,7 +1486,10 @@ func (u *Upload) Finish() (node *Node, err error) {
 		u.ukey[2] ^ meta_mac[0], u.ukey[3] ^ meta_mac[1],
 		u.ukey[4], u.ukey[5], meta_mac[0], meta_mac[1]}
 
-	buf := a32_to_bytes(key)
+	buf, err := a32_to_bytes(key)
+	if err != nil {
+		return nil, err
+	}
 	master_aes, err := aes.NewCipher(u.m.k)
 	if err != nil {
 		return nil, err
@@ -1278,8 +1506,8 @@ func (u *Upload) Finish() (node *Node, err error) {
 	cmsg[0].T = u.parenthash
 	cmsg[0].N[0].H = string(u.completion_handle)
 	cmsg[0].N[0].T = FILE
-	cmsg[0].N[0].A = string(attr_data)
-	cmsg[0].N[0].K = string(base64urlencode(buf))
+	cmsg[0].N[0].A = attr_data
+	cmsg[0].N[0].K = base64urlencode(buf)
 
 	request, err := json.Marshal(cmsg)
 	if err != nil {
@@ -1301,7 +1529,7 @@ func (u *Upload) Finish() (node *Node, err error) {
 }
 
 // Upload a file to the filesystem
-func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *chan int) (*Node, error) {
+func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *chan int) (node *Node, err error) {
 	defer func() {
 		if progress != nil {
 			close(*progress)
@@ -1320,6 +1548,12 @@ func (m *Mega) UploadFile(srcpath string, parent *Node, name string, progress *c
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		e := infile.Close()
+		if err == nil {
+			err = e
+		}
+	}()
 
 	if name == "" {
 		name = filepath.Base(srcpath)
@@ -1411,9 +1645,11 @@ func (m *Mega) Move(src *Node, parent *Node) error {
 		return err
 	}
 
-	request, _ := json.Marshal(msg)
+	request, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
 	_, err = m.api_request(request)
-
 	if err != nil {
 		return err
 	}
@@ -1438,30 +1674,42 @@ func (m *Mega) Rename(src *Node, name string) error {
 	}
 	var msg [1]FileAttrMsg
 
-	master_aes, _ := aes.NewCipher(m.k)
+	master_aes, err := aes.NewCipher(m.k)
+	if err != nil {
+		return err
+	}
 	attr := FileAttr{name}
-	attr_data, _ := encryptAttr(src.meta.key, attr)
+	attr_data, err := encryptAttr(src.meta.key, attr)
+	if err != nil {
+		return err
+	}
 	key := make([]byte, len(src.meta.compkey))
-	err := blockEncrypt(master_aes, key, src.meta.compkey)
+	err = blockEncrypt(master_aes, key, src.meta.compkey)
 	if err != nil {
 		return err
 	}
 
 	msg[0].Cmd = "a"
-	msg[0].Attr = string(attr_data)
-	msg[0].Key = string(base64urlencode(key))
+	msg[0].Attr = attr_data
+	msg[0].Key = base64urlencode(key)
 	msg[0].N = src.hash
 	msg[0].I, err = randString(10)
 	if err != nil {
 		return err
 	}
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
 	_, err = m.api_request(req)
+	if err != nil {
+		return err
+	}
 
 	src.name = name
 
-	return err
+	return nil
 }
 
 // Create a directory in the filesystem
@@ -1480,12 +1728,21 @@ func (m *Mega) CreateDir(name string, parent *Node) (*Node, error) {
 		compkey[i] = uint32(mrand.Int31())
 	}
 
-	master_aes, _ := aes.NewCipher(m.k)
+	master_aes, err := aes.NewCipher(m.k)
+	if err != nil {
+		return nil, err
+	}
 	attr := FileAttr{name}
-	ukey := a32_to_bytes(compkey[:4])
-	attr_data, _ := encryptAttr(ukey, attr)
+	ukey, err := a32_to_bytes(compkey[:4])
+	if err != nil {
+		return nil, err
+	}
+	attr_data, err := encryptAttr(ukey, attr)
+	if err != nil {
+		return nil, err
+	}
 	key := make([]byte, len(ukey))
-	err := blockEncrypt(master_aes, key, ukey)
+	err = blockEncrypt(master_aes, key, ukey)
 	if err != nil {
 		return nil, err
 	}
@@ -1494,14 +1751,17 @@ func (m *Mega) CreateDir(name string, parent *Node) (*Node, error) {
 	msg[0].T = parent.hash
 	msg[0].N[0].H = "xxxxxxxx"
 	msg[0].N[0].T = FOLDER
-	msg[0].N[0].A = string(attr_data)
-	msg[0].N[0].K = string(base64urlencode(key))
+	msg[0].N[0].A = attr_data
+	msg[0].N[0].K = base64urlencode(key)
 	msg[0].I, err = randString(10)
 	if err != nil {
 		return nil, err
 	}
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
 	result, err := m.api_request(req)
 	if err != nil {
 		return nil, err
@@ -1537,14 +1797,20 @@ func (m *Mega) Delete(node *Node, destroy bool) error {
 		return err
 	}
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
 	_, err = m.api_request(req)
+	if err != nil {
+		return err
+	}
 
 	parent := m.FS.lookup[node.hash]
 	parent.removeChild(node)
 	delete(m.FS.lookup, node.hash)
 
-	return err
+	return nil
 }
 
 // process an add node event
@@ -1579,7 +1845,10 @@ func (m *Mega) processUpdateNode(evRaw []byte) error {
 	}
 
 	node := m.FS.hashLookup(ev.N)
-	attr, err := decryptAttr(node.meta.key, []byte(ev.Attr))
+	if node == nil {
+		return ENOENT
+	}
+	attr, err := decryptAttr(node.meta.key, ev.Attr)
 	if err == nil {
 		node.name = attr.Name
 	} else {
@@ -1623,7 +1892,7 @@ func (m *Mega) pollEvents() {
 			sleepTime = minSleepTime
 		}
 
-		url := fmt.Sprintf("%s/sc?sn=%s&sid=%s", m.baseurl, m.ssn, string(m.sid))
+		url := fmt.Sprintf("%s/sc?sn=%s&sid=%s", m.baseurl, m.ssn, m.sid)
 		resp, err = m.client.Post(url, "application/xml", nil)
 		if err != nil {
 			m.logf("pollEvents: Error fetching status: %s", err)
@@ -1753,9 +2022,11 @@ func (m *Mega) getLink(n *Node) (string, error) {
 	msg[0].Cmd = "l"
 	msg[0].N = n.GetHash()
 
-	req, _ := json.Marshal(msg)
+	req, err := json.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
 	result, err := m.api_request(req)
-
 	if err != nil {
 		return "", err
 	}
@@ -1774,7 +2045,7 @@ func (m *Mega) Link(n *Node, includeKey bool) (string, error) {
 	}
 	if includeKey {
 		m.FS.mutex.Lock()
-		key := string(base64urlencode(n.meta.compkey))
+		key := base64urlencode(n.meta.compkey)
 		m.FS.mutex.Unlock()
 		return fmt.Sprintf("%v/#!%v!%v", BASE_DOWNLOAD_URL, id, key), nil
 	} else {
